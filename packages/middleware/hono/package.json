@@ -1,0 +1,56 @@
+{
+    "name": "@universal-rate-limit/hono",
+    "version": "0.1.0",
+    "description": "Hono middleware for universal-rate-limit",
+    "type": "module",
+    "sideEffects": false,
+    "engines": {
+        "node": ">=20"
+    },
+    "files": [
+        "dist",
+        "LICENSE"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "import": "./dist/index.mjs"
+        }
+    },
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts",
+    "scripts": {
+        "build": "tsdown",
+        "dev": "tsdown --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "universal-rate-limit": "workspace:*"
+    },
+    "peerDependencies": {
+        "hono": ">=4.0.0"
+    },
+    "devDependencies": {
+        "hono": "^4.7.0"
+    },
+    "keywords": [
+        "rate-limit",
+        "middleware",
+        "hono"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
+        "directory": "packages/middleware/hono"
+    },
+    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/middleware/hono#readme",
+    "bugs": {
+        "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "license": "MIT"
+}

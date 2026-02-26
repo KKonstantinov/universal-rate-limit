@@ -1,0 +1,49 @@
+{
+    "name": "universal-rate-limit",
+    "version": "0.1.0",
+    "description": "Web-standards-based rate limiting library with pluggable stores and framework middleware adapters",
+    "type": "module",
+    "sideEffects": false,
+    "engines": {
+        "node": ">=20"
+    },
+    "files": [
+        "dist",
+        "LICENSE"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "import": "./dist/index.mjs"
+        }
+    },
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts",
+    "scripts": {
+        "build": "tsdown",
+        "dev": "tsdown --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "keywords": [
+        "rate-limit",
+        "rate-limiting",
+        "throttle",
+        "middleware",
+        "web-standards",
+        "deno",
+        "bun",
+        "edge"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
+        "directory": "packages/core"
+    },
+    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/core#readme",
+    "bugs": {
+        "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
+    },
+    "license": "MIT"
+}

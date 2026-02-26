@@ -1,0 +1,6 @@
+# Build output
+**/dist/
+
+# Lock files
+pnpm-lock.yaml
+.npmrc

@@ -1,0 +1,57 @@
+{
+    "name": "@universal-rate-limit/nextjs",
+    "version": "0.1.0",
+    "description": "Next.js middleware and API route wrapper for universal-rate-limit",
+    "type": "module",
+    "sideEffects": false,
+    "engines": {
+        "node": ">=20"
+    },
+    "files": [
+        "dist",
+        "LICENSE"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "import": "./dist/index.mjs"
+        }
+    },
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts",
+    "scripts": {
+        "build": "tsdown",
+        "dev": "tsdown --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "universal-rate-limit": "workspace:*"
+    },
+    "peerDependencies": {
+        "next": ">=14.0.0"
+    },
+    "devDependencies": {
+        "next": "^15.3.0"
+    },
+    "keywords": [
+        "rate-limit",
+        "middleware",
+        "nextjs",
+        "next"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
+        "directory": "packages/middleware/nextjs"
+    },
+    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/middleware/nextjs#readme",
+    "bugs": {
+        "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "license": "MIT"
+}
