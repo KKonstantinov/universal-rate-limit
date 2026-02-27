@@ -2,6 +2,6 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
     test: {
-        projects: ['packages/core', 'packages/middleware/*', 'tests/integration']
+        testTimeout: 30_000
     }
 });

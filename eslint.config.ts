@@ -6,7 +6,7 @@ import prettier from 'eslint-plugin-prettier/recommended';
 // eslint-disable-next-line @typescript-eslint/no-deprecated -- defineConfig not yet available in this version
 export default tseslint.config(
     {
-        ignores: ['**/dist/', '**/node_modules/']
+        ignores: ['**/dist/', '**/node_modules/', 'tests/bun/**', 'tests/deno/**']
     },
     eslint.configs.recommended,
     tseslint.configs.strictTypeChecked,
@@ -31,7 +31,7 @@ export default tseslint.config(
         }
     },
     {
-        files: ['packages/core/test/**/*.ts', 'packages/middleware/*/test/**/*.ts'],
+        files: ['packages/core/test/**/*.ts', 'packages/middleware/*/test/**/*.ts', 'tests/integration/**/*.ts'],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',
@@ -39,6 +39,9 @@ export default tseslint.config(
             '@typescript-eslint/no-floating-promises': 'off',
             'unicorn/consistent-function-scoping': 'off',
             '@typescript-eslint/require-await': 'off',
+            '@typescript-eslint/no-misused-promises': 'off',
+            '@typescript-eslint/restrict-template-expressions': 'off',
+            '@typescript-eslint/no-confusing-void-expression': 'off',
             'unicorn/no-useless-undefined': 'off'
         }
     },

@@ -39,3 +39,35 @@ jobs:
             - run: pnpm install --frozen-lockfile
             - run: pnpm build
             - run: pnpm test
+
+    test-bun:
+        name: Test (Bun)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - uses: oven-sh/setup-bun@v2
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+            - run: bun test tests/bun/
+
+    test-deno:
+        name: Test (Deno)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: pnpm
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+            - run: deno test --allow-net tests/deno/
