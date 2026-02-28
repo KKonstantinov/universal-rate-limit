@@ -24,7 +24,8 @@
         "dev": "tsdown --watch",
         "test": "vitest run",
         "test:watch": "vitest",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsgo --noEmit",
+        "release:jsr": "npx jsr publish"
     },
     "keywords": [
         "rate-limit",

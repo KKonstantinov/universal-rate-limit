@@ -24,7 +24,7 @@
         "dev": "tsdown --watch",
         "test": "vitest run",
         "test:watch": "vitest",
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsgo --noEmit"
     },
     "dependencies": {
         "fastify-plugin": "^5.1.0",

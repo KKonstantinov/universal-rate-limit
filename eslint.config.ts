@@ -1,12 +1,22 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import unicorn from 'eslint-plugin-unicorn';
+import importX from 'eslint-plugin-import-x';
 import prettier from 'eslint-plugin-prettier/recommended';
 
 // eslint-disable-next-line @typescript-eslint/no-deprecated -- defineConfig not yet available in this version
 export default tseslint.config(
     {
-        ignores: ['**/dist/', '**/node_modules/', 'tests/bun/**', 'tests/deno/**']
+        ignores: [
+            '**/dist/',
+            '**/node_modules/',
+            'tests/bun/**',
+            'tests/deno/**',
+            'scripts/',
+            'docs/.vitepress/cache/',
+            'docs/.vitepress/dist/',
+            'docs/.vitepress/config.ts'
+        ]
     },
     eslint.configs.recommended,
     tseslint.configs.strictTypeChecked,
@@ -20,6 +30,11 @@ export default tseslint.config(
     },
     unicorn.configs['recommended'],
     {
+        plugins: {
+            'import-x': importX
+        }
+    },
+    {
         rules: {
             'unicorn/no-null': 'off',
             'unicorn/prevent-abbreviations': 'off',
@@ -27,7 +42,9 @@ export default tseslint.config(
             'unicorn/no-nested-ternary': 'off',
             'unicorn/no-process-exit': 'off',
             'unicorn/filename-case': 'off',
-            'unicorn/no-lonely-if': 'off'
+            'unicorn/no-lonely-if': 'off',
+            '@typescript-eslint/consistent-type-imports': ['error', { disallowTypeAnnotations: false }],
+            'import-x/consistent-type-specifier-style': ['error', 'prefer-top-level']
         }
     },
     {
