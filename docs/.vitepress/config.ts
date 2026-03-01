@@ -30,6 +30,45 @@ export default defineConfig({
                 ]
             },
             {
+                text: 'Packages',
+                items: [
+                    {
+                        text: 'universal-rate-limit',
+                        link: '/packages/core'
+                    },
+                    {
+                        text: 'Stores',
+                        items: [
+                            {
+                                text: '@universal-rate-limit/redis',
+                                link: '/packages/redis'
+                            }
+                        ]
+                    },
+                    {
+                        text: 'Middleware',
+                        items: [
+                            {
+                                text: '@universal-rate-limit/express',
+                                link: '/packages/express'
+                            },
+                            {
+                                text: '@universal-rate-limit/fastify',
+                                link: '/packages/fastify'
+                            },
+                            {
+                                text: '@universal-rate-limit/hono',
+                                link: '/packages/hono'
+                            },
+                            {
+                                text: '@universal-rate-limit/nextjs',
+                                link: '/packages/nextjs'
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
                 text: 'Reference',
                 items: [{ text: 'API Reference', link: '/api' }]
             }
