@@ -1,0 +1,96 @@
+# universal-rate-limit
+
+Web-standards-based rate limiting with pluggable stores and framework middleware. Zero dependencies, works everywhere.
+
+Rate limit any HTTP endpoint using the Web Standards `Request`/`Response` API — with built-in support for Express, Fastify, Hono, and Next.js. Swap between fixed-window and sliding-window algorithms, bring your own store, and get IETF-compliant rate limit headers out of the box.
+
+## Install
+
+```bash
+npm install universal-rate-limit
+```
+
+## Quick Start
+
+```ts
+import { rateLimit } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    windowMs: 60_000, // 1 minute
+    limit: 60 // 60 requests per window
+});
+
+// Use with any Web Standard Request
+const result = await limiter(request);
+
+if (result.limited) {
+    return new Response('Too Many Requests', {
+        status: 429,
+        headers: result.headers
+    });
+}
+```
+
+## Options
+
+All options are optional. Defaults are shown below:
+
+```ts
+rateLimit({
+    windowMs: 60_000, // Time window in milliseconds (default: 1 minute)
+    limit: 60, // Max requests per window (number or async function)
+    algorithm: 'fixed-window', // 'fixed-window' or 'sliding-window'
+    headers: 'draft-7', // 'draft-7' or 'draft-6'
+    store: new MemoryStore(), // Custom store implementation
+    keyGenerator: req => ip, // Extract client identifier from request
+    skip: req => false, // Skip rate limiting for certain requests
+    handler: undefined, // Custom 429 response handler
+    message: 'Too Many Requests', // Response body (string, object, or function)
+    statusCode: 429, // HTTP status code when limited
+    passOnStoreError: false // Fail open if store errors
+});
+```
+
+## Store Interface
+
+Implement the `Store` interface to use any backend:
+
+```ts
+import type { Store, IncrementResult } from 'universal-rate-limit';
+
+class MyStore implements Store {
+    async increment(key: string): Promise<IncrementResult> {
+        // Increment counter and return { totalHits, resetTime }
+    }
+    async decrement(key: string): Promise<void> {
+        /* ... */
+    }
+    async resetKey(key: string): Promise<void> {
+        /* ... */
+    }
+    async resetAll(): Promise<void> {
+        /* ... */
+    }
+}
+
+const limiter = rateLimit({ store: new MyStore() });
+```
+
+A ready-made Redis store is available via [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis).
+
+## Framework Middleware
+
+Drop-in adapters are available as separate packages:
+
+- [`@universal-rate-limit/express`](https://www.npmjs.com/package/@universal-rate-limit/express)
+- [`@universal-rate-limit/fastify`](https://www.npmjs.com/package/@universal-rate-limit/fastify)
+- [`@universal-rate-limit/hono`](https://www.npmjs.com/package/@universal-rate-limit/hono)
+- [`@universal-rate-limit/nextjs`](https://www.npmjs.com/package/@universal-rate-limit/nextjs)
+
+## Documentation
+
+**[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**
+
+## License
+
+MIT
