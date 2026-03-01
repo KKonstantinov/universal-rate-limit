@@ -148,6 +148,11 @@ This is a monorepo managed with [pnpm workspaces](https://pnpm.io/workspaces):
 | Cloudflare Workers | -       | Compatible |
 | Vercel Edge        | -       | Compatible |
 
+## Acknowledgements
+
+Inspired by [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) — the most popular rate limiting middleware for Express.js. `universal-rate-limit` builds on its proven API design while extending it to work across frameworks and runtimes with Web
+Standard APIs.
+
 ## License
 
 MIT
