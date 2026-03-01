@@ -111,6 +111,12 @@ importers:
         specifier: ^15.3.0
         version: 15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
 
+  packages/redis:
+    dependencies:
+      universal-rate-limit:
+        specifier: workspace:*
+        version: link:../core
+
 packages:
 
   '@algolia/abtesting@1.15.1':

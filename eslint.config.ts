@@ -48,7 +48,12 @@ export default tseslint.config(
         }
     },
     {
-        files: ['packages/core/test/**/*.ts', 'packages/middleware/*/test/**/*.ts', 'tests/integration/**/*.ts'],
+        files: [
+            'packages/core/test/**/*.ts',
+            'packages/redis/test/**/*.ts',
+            'packages/middleware/*/test/**/*.ts',
+            'tests/integration/**/*.ts'
+        ],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unsafe-argument': 'off',

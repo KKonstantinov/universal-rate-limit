@@ -1,0 +1,50 @@
+{
+    "name": "@universal-rate-limit/redis",
+    "version": "0.1.0",
+    "description": "Redis store for universal-rate-limit",
+    "type": "module",
+    "sideEffects": false,
+    "engines": {
+        "node": ">=20"
+    },
+    "files": [
+        "dist",
+        "LICENSE"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.mts",
+            "import": "./dist/index.mjs"
+        }
+    },
+    "main": "./dist/index.mjs",
+    "types": "./dist/index.d.mts",
+    "scripts": {
+        "build": "tsdown",
+        "dev": "tsdown --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsgo --noEmit"
+    },
+    "dependencies": {
+        "universal-rate-limit": "workspace:*"
+    },
+    "keywords": [
+        "rate-limit",
+        "redis",
+        "store"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
+        "directory": "packages/redis"
+    },
+    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/redis#readme",
+    "bugs": {
+        "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "license": "MIT"
+}

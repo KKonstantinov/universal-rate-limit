@@ -60,54 +60,91 @@ const limiter = rateLimit({ store });
 store.shutdown();
 ```
 
+## Redis Store
+
+The `@universal-rate-limit/redis` package provides a production-ready Redis store. It is **client-agnostic** — you provide a `sendCommand` function that wraps your preferred Redis client.
+
+```bash
+npm install @universal-rate-limit/redis
+```
+
+### Usage with ioredis
+
+```ts
+import { rateLimit } from 'universal-rate-limit';
+import { RedisStore } from '@universal-rate-limit/redis';
+import Redis from 'ioredis';
+
+const redis = new Redis();
+
+const store = new RedisStore({
+    sendCommand: (...args: string[]) => redis.call(...args),
+    windowMs: 60_000
+});
+
+const limiter = rateLimit({
+    windowMs: 60_000,
+    limit: 100,
+    store
+});
+```
+
+### Usage with node-redis
+
+```ts
+import { createClient } from 'redis';
+import { RedisStore } from '@universal-rate-limit/redis';
+
+const client = createClient();
+await client.connect();
+
+const store = new RedisStore({
+    sendCommand: (...args: string[]) => client.sendCommand(args),
+    windowMs: 60_000
+});
+```
+
+### Options
+
+| Option                | Type            | Default | Description                              |
+| --------------------- | --------------- | ------- | ---------------------------------------- |
+| `sendCommand`         | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
+| `windowMs`            | `number`        | —       | **Required.** Window duration in ms.     |
+| `prefix`              | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
+| `resetExpiryOnChange` | `boolean`       | `false` | Reset the TTL on every increment.        |
+
+### How It Works
+
+- **Atomic increments** use Lua scripts (`EVALSHA`) so the hit count and TTL are always consistent.
+- **NOSCRIPT recovery** — if the Redis script cache is flushed (e.g., after a restart), the store automatically reloads the script and retries.
+- **Non-blocking `resetAll()`** uses `SCAN` + `DEL` instead of `KEYS` to avoid blocking Redis.
+- **Zero Redis client dependencies** — works with ioredis, node-redis, or any client that can send raw commands.
+
 ## Custom Store
 
-Implement the `Store` interface to use Redis, Durable Objects, KV, or any other backend:
+Implement the `Store` interface to use Durable Objects, KV, or any other backend:
 
 ```ts
 import type { Store, IncrementResult } from 'universal-rate-limit';
 
-class RedisStore implements Store {
-    private redis: RedisClient;
-    private windowMs: number;
-
-    constructor(redis: RedisClient, windowMs: number) {
-        this.redis = redis;
-        this.windowMs = windowMs;
-    }
-
+class MyStore implements Store {
     async increment(key: string): Promise<IncrementResult> {
-        const totalHits = await this.redis.incr(`rl:${key}`);
-        if (totalHits === 1) {
-            await this.redis.pexpire(`rl:${key}`, this.windowMs);
-        }
-        const ttl = await this.redis.pttl(`rl:${key}`);
-        const resetTime = new Date(Date.now() + ttl);
-        return { totalHits, resetTime };
+        // Your implementation
+        return { totalHits: 1, resetTime: new Date(Date.now() + 60_000) };
     }
 
     async decrement(key: string): Promise<void> {
-        await this.redis.decr(`rl:${key}`);
+        // Your implementation
     }
 
     async resetKey(key: string): Promise<void> {
-        await this.redis.del(`rl:${key}`);
+        // Your implementation
     }
 
     async resetAll(): Promise<void> {
-        const keys = await this.redis.keys('rl:*');
-        if (keys.length > 0) {
-            await this.redis.del(...keys);
-        }
+        // Your implementation
     }
 }
-
-// Usage
-const limiter = rateLimit({
-    store: new RedisStore(redis, 60_000),
-    windowMs: 60_000,
-    limit: 100
-});
 ```
 
 ## Fail Open

@@ -112,6 +112,41 @@ const store = new MemoryStore(windowMs, algorithm);
 
 ---
 
+## `RedisStore`
+
+Redis-backed store from `@universal-rate-limit/redis`. Uses Lua scripts for atomic operations.
+
+```ts
+import { RedisStore } from '@universal-rate-limit/redis';
+
+const store = new RedisStore({
+    sendCommand: (...args) => redis.call(...args),
+    windowMs: 60_000,
+    prefix: 'rl:',
+    resetExpiryOnChange: false
+});
+```
+
+**Constructor:**
+
+| Parameter             | Type            | Default | Description                              |
+| --------------------- | --------------- | ------- | ---------------------------------------- |
+| `sendCommand`         | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
+| `windowMs`            | `number`        | —       | **Required.** Window duration in ms.     |
+| `prefix`              | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
+| `resetExpiryOnChange` | `boolean`       | `false` | Reset the TTL on every increment.        |
+
+**Methods:**
+
+| Method           | Description                                           |
+| ---------------- | ----------------------------------------------------- |
+| `increment(key)` | Increment counter, returns `Promise<IncrementResult>` |
+| `decrement(key)` | Decrement counter                                     |
+| `resetKey(key)`  | Reset a single key                                    |
+| `resetAll()`     | Clear all prefixed keys via `SCAN` + `DEL`            |
+
+---
+
 ## `Store` Interface
 
 Implement this interface for custom storage backends.
@@ -138,6 +173,18 @@ interface IncrementResult {
 type Algorithm = 'fixed-window' | 'sliding-window';
 type HeadersVersion = 'draft-6' | 'draft-7';
 ```
+
+---
+
+## Store Exports
+
+### `@universal-rate-limit/redis`
+
+```ts
+import { RedisStore } from '@universal-rate-limit/redis';
+```
+
+`RedisStore` — Client-agnostic Redis store. Also re-exports `Store` and `IncrementResult` from core.
 
 ---
 
