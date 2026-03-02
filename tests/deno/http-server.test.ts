@@ -13,7 +13,7 @@ Deno.test('rate limiting through Deno.serve — allow then block', async () => {
         }
         const headers = new Headers();
         for (const [k, v] of Object.entries(result.headers)) {
-            headers.set(k, v);
+            headers.set(k, String(v));
         }
         return new Response('OK', { status: 200, headers });
     });
@@ -52,7 +52,7 @@ Deno.test('429 response includes correct rate limit headers', async () => {
         }
         const headers = new Headers();
         for (const [k, v] of Object.entries(result.headers)) {
-            headers.set(k, v);
+            headers.set(k, String(v));
         }
         return new Response('OK', { status: 200, headers });
     });

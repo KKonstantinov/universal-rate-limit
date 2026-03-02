@@ -1,5 +1,8 @@
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/** A value that may or may not be wrapped in a Promise. */
+export type MaybePromise<T> = T | Promise<T>;
+
 /** The result of a store increment operation. */
 export interface IncrementResult {
     /** Total number of hits recorded in the current window for a given key. */
@@ -17,13 +20,13 @@ export interface IncrementResult {
  */
 export interface Store {
     /** Increment the hit count for `key` and return the updated totals. */
-    increment(key: string): Promise<IncrementResult>;
+    increment(key: string): MaybePromise<IncrementResult>;
     /** Decrement the hit count for `key` (e.g. to undo a counted request). */
-    decrement(key: string): Promise<void>;
+    decrement(key: string): MaybePromise<void>;
     /** Remove all rate limit data for a single `key`. */
-    resetKey(key: string): Promise<void>;
+    resetKey(key: string): MaybePromise<void>;
     /** Remove all rate limit data for every key in the store. */
-    resetAll(): Promise<void>;
+    resetAll(): MaybePromise<void>;
 }
 
 /**
@@ -145,37 +148,37 @@ function defaultKeyGenerator(request: Request): string {
  * @param version - The header draft format to use.
  * @param limit - Maximum allowed requests in the window.
  * @param remaining - Remaining requests before the limit is hit.
- * @param resetTime - Absolute time when the window resets.
- * @param windowMs - Window duration in milliseconds (used by draft-7 policy).
+ * @param resetTimeMs - Unix-ms timestamp when the window resets.
+ * @param nowMs - Current Unix-ms timestamp (avoids redundant Date.now() calls).
+ * @param windowSeconds - Window duration in seconds (pre-computed by the factory).
+ * @param legacyHeaders - Whether to include X-RateLimit-* headers.
+ * @param policyHeader - Pre-computed RateLimit-Policy value (static-limit optimisation).
  * @returns A plain object of header name/value pairs.
  */
 function generateHeaders(
     version: HeadersVersion,
     limit: number,
     remaining: number,
-    resetTime: Date,
-    windowMs: number,
-    legacyHeaders: boolean
+    resetTimeMs: number,
+    nowMs: number,
+    windowSeconds: number,
+    legacyHeaders: boolean,
+    policyHeader?: string
 ): Record<string, string> {
-    const resetSeconds = Math.max(0, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+    const resetSeconds = Math.max(0, Math.ceil((resetTimeMs - nowMs) / 1000));
     const clampedRemaining = String(Math.max(0, remaining));
 
-    let headers: Record<string, string>;
-
-    if (version === 'draft-6') {
-        headers = {
-            'RateLimit-Limit': String(limit),
-            'RateLimit-Remaining': clampedRemaining,
-            'RateLimit-Reset': String(resetSeconds)
-        };
-    } else {
-        // draft-7: combined headers using Structured Fields
-        const windowSeconds = Math.ceil(windowMs / 1000);
-        headers = {
-            RateLimit: 'limit=' + String(limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
-            'RateLimit-Policy': String(limit) + ';w=' + String(windowSeconds)
-        };
-    }
+    const headers: Record<string, string> =
+        version === 'draft-6'
+            ? {
+                  'RateLimit-Limit': String(limit),
+                  'RateLimit-Remaining': clampedRemaining,
+                  'RateLimit-Reset': String(resetSeconds)
+              }
+            : {
+                  RateLimit: 'limit=' + String(limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
+                  'RateLimit-Policy': policyHeader ?? String(limit) + ';w=' + String(windowSeconds)
+              };
 
     if (legacyHeaders) {
         headers['X-RateLimit-Limit'] = String(limit);
@@ -194,6 +197,8 @@ interface WindowEntry {
     hits: number;
     /** Unix-ms timestamp at which this window expires. */
     resetTime: number;
+    /** Cached Date for resetTime — avoids allocating a new Date per request. */
+    resetDate: Date;
 }
 
 /**
@@ -233,7 +238,7 @@ export class MemoryStore implements Store {
     }
 
     /** @inheritdoc */
-    increment(key: string): Promise<IncrementResult> {
+    increment(key: string): IncrementResult {
         const now = Date.now();
         const windowStart = Math.floor(now / this.windowMs) * this.windowMs;
         const windowEnd = windowStart + this.windowMs;
@@ -244,7 +249,7 @@ export class MemoryStore implements Store {
             if (entry) {
                 this.previous.set(key, entry);
             }
-            entry = { hits: 0, resetTime: windowEnd };
+            entry = { hits: 0, resetTime: windowEnd, resetDate: new Date(windowEnd) };
             this.current.set(key, entry);
         }
 
@@ -256,33 +261,30 @@ export class MemoryStore implements Store {
             const elapsed = now - windowStart;
             const weight = 1 - elapsed / this.windowMs;
             const totalHits = Math.ceil(prevHits * weight + entry.hits);
-            return Promise.resolve({ totalHits, resetTime: new Date(windowEnd) });
+            return { totalHits, resetTime: entry.resetDate };
         }
 
-        return Promise.resolve({ totalHits: entry.hits, resetTime: new Date(entry.resetTime) });
+        return { totalHits: entry.hits, resetTime: entry.resetDate };
     }
 
     /** @inheritdoc */
-    decrement(key: string): Promise<void> {
+    decrement(key: string): void {
         const entry = this.current.get(key);
         if (entry && entry.hits > 0) {
             entry.hits--;
         }
-        return Promise.resolve();
     }
 
     /** @inheritdoc */
-    resetKey(key: string): Promise<void> {
+    resetKey(key: string): void {
         this.current.delete(key);
         this.previous.delete(key);
-        return Promise.resolve();
     }
 
     /** @inheritdoc */
-    resetAll(): Promise<void> {
+    resetAll(): void {
         this.current.clear();
         this.previous.clear();
-        return Promise.resolve();
     }
 
     /** Stop the background cleanup interval. Call this when the store is no longer needed. */
@@ -310,18 +312,27 @@ export class MemoryStore implements Store {
     }
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Check if a value is a Promise (thenable). */
+function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+    return typeof value === 'object' && value !== null && 'then' in value;
+}
+
 // ── rateLimit factory ────────────────────────────────────────────────────────
 
 /**
  * Create a framework-agnostic rate limiter function.
  *
- * Returns an async function that accepts a Web API {@link Request} and
+ * Returns a function that accepts a Web API {@link Request} and
  * resolves to a {@link RateLimitResult} indicating whether the request
- * should be allowed or rejected.
+ * should be allowed or rejected. When the configured store is synchronous
+ * (e.g. the built-in {@link MemoryStore}), the result is returned
+ * synchronously — no Promises are created on the hot path.
  *
  * @param options - Configuration for the rate limiter. All fields are optional
  *   and have sensible defaults (60 requests per 60 s, fixed-window, in-memory store).
- * @returns An async function `(request: Request) => Promise<RateLimitResult>`.
+ * @returns A function `(request: Request) => RateLimitResult | Promise<RateLimitResult>`.
  *
  * @example
  * ```ts
@@ -332,7 +343,7 @@ export class MemoryStore implements Store {
  */
 export function rateLimit<TRequest = Request>(
     options: RateLimitOptions<TRequest> = {} as RateLimitOptions<TRequest>
-): (request: TRequest) => Promise<RateLimitResult> {
+): (request: TRequest) => RateLimitResult | Promise<RateLimitResult> {
     const windowMs = options.windowMs ?? 60_000;
     const limitOption = options.limit ?? 60;
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
@@ -341,61 +352,115 @@ export function rateLimit<TRequest = Request>(
     const legacyHeaders = options.legacyHeaders ?? false;
     const passOnStoreError = options.passOnStoreError ?? false;
     const skip = options.skip;
-    const handler = options.handler;
 
     const store = options.store ?? new MemoryStore(windowMs, algorithm);
 
-    return async (request: TRequest): Promise<RateLimitResult> => {
-        // Check skip
+    // Pre-compute constants that are invariant across requests
+    const windowSeconds = Math.ceil(windowMs / 1000);
+    const staticPolicyHeader =
+        typeof limitOption !== 'function' && headersVersion === 'draft-7' ? String(limitOption) + ';w=' + String(windowSeconds) : undefined;
+
+    function makeSkipResult(limit: number, now: number): RateLimitResult {
+        const resetTimeMs = now + windowMs;
+        return {
+            limited: false,
+            limit,
+            remaining: limit,
+            resetTime: new Date(resetTimeMs),
+            headers: generateHeaders(headersVersion, limit, limit, resetTimeMs, now, windowSeconds, legacyHeaders, staticPolicyHeader)
+        };
+    }
+
+    function makePassResult(limit: number, now: number): RateLimitResult {
+        const resetTimeMs = now + windowMs;
+        return {
+            limited: false,
+            limit,
+            remaining: limit,
+            resetTime: new Date(resetTimeMs),
+            headers: generateHeaders(headersVersion, limit, limit, resetTimeMs, now, windowSeconds, legacyHeaders, staticPolicyHeader)
+        };
+    }
+
+    function buildResult(incrementResult: IncrementResult, limit: number, now: number): RateLimitResult {
+        const remaining = limit - incrementResult.totalHits;
+        const limited = remaining < 0;
+        const resetTimeMs = incrementResult.resetTime.getTime();
+        const headers = generateHeaders(
+            headersVersion,
+            limit,
+            remaining,
+            resetTimeMs,
+            now,
+            windowSeconds,
+            legacyHeaders,
+            staticPolicyHeader
+        );
+        return { limited, limit, remaining: Math.max(0, remaining), resetTime: incrementResult.resetTime, headers };
+    }
+
+    // Not async on purpose — when the store is synchronous (e.g. MemoryStore),
+    // this avoids wrapping the result in a Promise and the associated microtask overhead.
+    function runIncrement(key: string, limit: number, now: number): RateLimitResult | Promise<RateLimitResult> {
+        try {
+            const incrementResult = store.increment(key);
+            if (isPromise(incrementResult)) {
+                return incrementResult.then(
+                    r => buildResult(r, limit, now),
+                    () => {
+                        if (passOnStoreError) return makePassResult(limit, now);
+                        throw new Error('Rate limit store error');
+                    }
+                );
+            }
+            return buildResult(incrementResult, limit, now);
+        } catch {
+            if (passOnStoreError) return makePassResult(limit, now);
+            throw new Error('Rate limit store error');
+        }
+    }
+
+    // Async fallback for when skip/limit/key are async
+    async function asyncPath(request: TRequest): Promise<RateLimitResult> {
+        const now = Date.now();
+
         if (skip) {
             const shouldSkip = await skip(request);
             if (shouldSkip) {
                 const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
-                return {
-                    limited: false,
-                    limit,
-                    remaining: limit,
-                    resetTime: new Date(Date.now() + windowMs),
-                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs, legacyHeaders)
-                };
+                return makeSkipResult(limit, now);
             }
+        }
+
+        const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
+        const key = await keyGenerator(request);
+        return runIncrement(key, limit, now);
+    }
+
+    // Not async on purpose — when all inputs (key, limit, store) are synchronous,
+    // this returns a plain RateLimitResult with no Promise/microtask overhead.
+    return (request: TRequest): RateLimitResult | Promise<RateLimitResult> => {
+        // Fast path: no skip, static limit, sync keyGenerator, sync store
+        if (skip) {
+            return asyncPath(request);
         }
 
         // Resolve limit
-        const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
-
-        let totalHits: number;
-        let resetTime: Date;
-
-        try {
-            const result = await store.increment(await keyGenerator(request));
-            totalHits = result.totalHits;
-            resetTime = result.resetTime;
-        } catch {
-            if (passOnStoreError) {
-                return {
-                    limited: false,
-                    limit,
-                    remaining: limit,
-                    resetTime: new Date(Date.now() + windowMs),
-                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs, legacyHeaders)
-                };
-            }
-            throw new Error('Rate limit store error');
+        if (typeof limitOption === 'function') {
+            return asyncPath(request);
         }
 
-        const remaining = limit - totalHits;
-        const limited = remaining < 0;
-        const headers = generateHeaders(headersVersion, limit, remaining, resetTime, windowMs, legacyHeaders);
+        const now = Date.now();
+        const limit = limitOption;
 
-        const result: RateLimitResult = { limited, limit, remaining: Math.max(0, remaining), resetTime, headers };
-
-        // If limited and a custom handler is provided, attach the response
-        if (limited && handler) {
-            result.headers = headers;
+        // Resolve key
+        const key = keyGenerator(request);
+        if (isPromise(key)) {
+            return key.then(k => runIncrement(k, limit, now));
         }
 
-        return result;
+        // Increment and build result — fully synchronous when store is sync
+        return runIncrement(key, limit, now);
     };
 }
 

@@ -50,7 +50,7 @@ describe('Shared store between limiters', () => {
         expect(r2.limited).toBe(true);
 
         // Reset the key via the shared store
-        await store.resetKey('10.0.0.1');
+        store.resetKey('10.0.0.1');
 
         // Both limiters should allow requests again
         const r3 = await limiterA(req);
@@ -76,7 +76,7 @@ describe('Shared store between limiters', () => {
         expect(r2.limited).toBe(true);
 
         // Reset all
-        await store.resetAll();
+        store.resetAll();
 
         // Both keys should be cleared
         const r3 = await limiterA(reqA);

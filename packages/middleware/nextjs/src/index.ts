@@ -87,6 +87,6 @@ export function withRateLimit(handler: NextjsApiHandler, options: NextjsRateLimi
  * }
  * ```
  */
-export function nextjsRateLimit(options: NextjsRateLimitOptions = {}): (request: Request) => Promise<RateLimitResult> {
+export function nextjsRateLimit(options: NextjsRateLimitOptions = {}): (request: Request) => RateLimitResult | Promise<RateLimitResult> {
     return rateLimit(options);
 }

@@ -1,6 +1,6 @@
 import type { Request as ExpressRequest, Response as ExpressResponse, NextFunction, RequestHandler } from 'express';
 import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
-import type { RateLimitOptions } from 'universal-rate-limit';
+import type { RateLimitOptions, RateLimitResult } from 'universal-rate-limit';
 
 export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
 
@@ -23,6 +23,53 @@ function expressDefaultKeyGenerator(req: ExpressRequest): string {
         }
     }
     return req.ip ?? '127.0.0.1';
+}
+
+/** Check if a value is a Promise (thenable). */
+function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+    return typeof value === 'object' && value !== null && 'then' in value;
+}
+
+/** Apply a non-limited rate limit result to the Express response and call next. */
+function applyResult(res: ExpressResponse, next: NextFunction, result: RateLimitResult): void {
+    const headers = result.headers;
+    for (const key in headers) {
+        res.setHeader(key, headers[key]);
+    }
+    next();
+}
+
+/** Handle a rate-limited result (async — builds the 429 response). */
+function handleLimited(
+    req: ExpressRequest,
+    res: ExpressResponse,
+    next: NextFunction,
+    result: RateLimitResult,
+    options: ExpressRateLimitOptions
+): void {
+    const headers = result.headers;
+    for (const key in headers) {
+        res.setHeader(key, headers[key]);
+    }
+    void buildRateLimitResponse<ExpressRequest>(req, result, {
+        handler: options.handler,
+        message: options.message,
+        statusCode: options.statusCode
+    }).then(
+        response => {
+            res.status(response.status);
+            void response.text().then(body => {
+                const contentType = response.headers.get('content-type');
+                if (contentType) {
+                    res.setHeader('Content-Type', contentType);
+                }
+                res.send(body);
+            });
+        },
+        (error: unknown) => {
+            next(error);
+        }
+    );
 }
 
 /**
@@ -50,37 +97,33 @@ export function expressRateLimit(options: ExpressRateLimitOptions = {}): Request
     };
     const limiter = rateLimit<ExpressRequest>(resolvedOptions);
 
+    // Not async on purpose — when the core limiter returns synchronously
+    // (e.g. MemoryStore), this avoids wrapping every request in a Promise.
     return (req: ExpressRequest, res: ExpressResponse, next: NextFunction): void => {
-        void (async () => {
-            try {
-                const result = await limiter(req);
+        const result = limiter(req);
 
-                // Set rate limit headers
-                for (const [key, value] of Object.entries(result.headers)) {
-                    res.setHeader(key, value);
-                }
-
-                if (result.limited) {
-                    const response = await buildRateLimitResponse<ExpressRequest>(req, result, {
-                        handler: options.handler,
-                        message: options.message,
-                        statusCode: options.statusCode
-                    });
-
-                    res.status(response.status);
-                    const body = await response.text();
-                    const contentType = response.headers.get('content-type');
-                    if (contentType) {
-                        res.setHeader('Content-Type', contentType);
+        if (isPromise(result)) {
+            result.then(
+                r => {
+                    if (r.limited) {
+                        handleLimited(req, res, next, r, options);
+                        return;
                     }
-                    res.send(body);
-                    return;
+                    applyResult(res, next, r);
+                },
+                (error: unknown) => {
+                    next(error);
                 }
+            );
+            return;
+        }
 
-                next();
-            } catch (error) {
-                next(error);
-            }
-        })();
+        // Synchronous fast path
+        if (result.limited) {
+            handleLimited(req, res, next, result, options);
+            return;
+        }
+
+        applyResult(res, next, result);
     };
 }

@@ -364,46 +364,46 @@ describe('MemoryStore', () => {
         store.shutdown();
     });
 
-    it('increments and returns hit count', async () => {
-        const r1 = await store.increment('key1');
+    it('increments and returns hit count', () => {
+        const r1 = store.increment('key1');
         expect(r1.totalHits).toBe(1);
 
-        const r2 = await store.increment('key1');
+        const r2 = store.increment('key1');
         expect(r2.totalHits).toBe(2);
     });
 
-    it('decrements hit count', async () => {
-        await store.increment('key1');
-        await store.increment('key1');
-        await store.decrement('key1');
+    it('decrements hit count', () => {
+        store.increment('key1');
+        store.increment('key1');
+        store.decrement('key1');
 
         // start=0, inc->1, inc->2, dec->1, inc->2
-        const result = await store.increment('key1');
+        const result = store.increment('key1');
         expect(result.totalHits).toBe(2);
     });
 
-    it('resets a specific key', async () => {
-        await store.increment('key1');
-        await store.increment('key1');
-        await store.resetKey('key1');
+    it('resets a specific key', () => {
+        store.increment('key1');
+        store.increment('key1');
+        store.resetKey('key1');
 
-        const result = await store.increment('key1');
+        const result = store.increment('key1');
         expect(result.totalHits).toBe(1);
     });
 
-    it('resets all keys', async () => {
-        await store.increment('key1');
-        await store.increment('key2');
-        await store.resetAll();
+    it('resets all keys', () => {
+        store.increment('key1');
+        store.increment('key2');
+        store.resetAll();
 
-        const r1 = await store.increment('key1');
-        const r2 = await store.increment('key2');
+        const r1 = store.increment('key1');
+        const r2 = store.increment('key2');
         expect(r1.totalHits).toBe(1);
         expect(r2.totalHits).toBe(1);
     });
 
-    it('returns a reset time in the future', async () => {
-        const result = await store.increment('key1');
+    it('returns a reset time in the future', () => {
+        const result = store.increment('key1');
         expect(result.resetTime.getTime()).toBeGreaterThan(Date.now());
     });
 });
