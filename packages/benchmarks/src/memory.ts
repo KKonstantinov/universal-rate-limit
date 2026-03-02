@@ -47,13 +47,13 @@ function formatBytes(bytes: number): string {
 
 // ── Universal-rate-limit MemoryStore ─────────────────────────────────────────
 
-async function benchUniversalMemory(): Promise<MemoryResult> {
+function benchUniversalMemory(): MemoryResult {
     forceGC();
     const before = process.memoryUsage().heapUsed;
 
     const store = new UniversalMemoryStore(WINDOW_MS, 'fixed-window');
     for (let i = 0; i < KEY_COUNT; i++) {
-        await store.increment(`key-${String(i)}`);
+        store.increment(`key-${String(i)}`);
     }
 
     forceGC();
@@ -139,7 +139,7 @@ console.log('='.repeat(60));
 console.log(`Keys: ${KEY_COUNT.toLocaleString()} | Window: ${String(WINDOW_MS)}ms`);
 console.log('');
 
-const results: MemoryResult[] = [await benchUniversalMemory(), await benchExpressMemory()];
+const results: MemoryResult[] = [benchUniversalMemory(), await benchExpressMemory()];
 
 console.log('Results:');
 console.log('-'.repeat(60));
