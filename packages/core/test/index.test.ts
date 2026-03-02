@@ -290,6 +290,38 @@ describe('rateLimit', () => {
             expect(result.headers['RateLimit-Limit']).toBe('10');
             expect(result.headers['RateLimit-Remaining']).toBe('9');
         });
+
+        it('includes legacy X-RateLimit headers when legacyHeaders is true', async () => {
+            const limiter = rateLimit({ limit: 10, windowMs: 60_000, legacyHeaders: true });
+            const result = await limiter(createRequest());
+
+            // Standard draft-7 headers should still be present
+            expect(result.headers).toHaveProperty('RateLimit');
+            expect(result.headers).toHaveProperty('RateLimit-Policy');
+            // Legacy headers should also be present
+            expect(result.headers['X-RateLimit-Limit']).toBe('10');
+            expect(result.headers['X-RateLimit-Remaining']).toBe('9');
+            expect(result.headers['X-RateLimit-Reset']).toMatch(/^\d+$/);
+        });
+
+        it('includes legacy headers alongside draft-6', async () => {
+            const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6', legacyHeaders: true });
+            const result = await limiter(createRequest());
+
+            // Standard draft-6 headers
+            expect(result.headers['RateLimit-Limit']).toBe('10');
+            expect(result.headers['RateLimit-Remaining']).toBe('9');
+            // Legacy headers
+            expect(result.headers['X-RateLimit-Limit']).toBe('10');
+            expect(result.headers['X-RateLimit-Remaining']).toBe('9');
+        });
+
+        it('does not include legacy headers by default', async () => {
+            const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+            const result = await limiter(createRequest());
+
+            expect(result.headers).not.toHaveProperty('X-RateLimit-Limit');
+        });
     });
 
     describe('default key generator', () => {

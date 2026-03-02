@@ -71,6 +71,13 @@ export interface RateLimitOptions<TRequest = Request> {
     /** The IETF RateLimit header draft version to emit. @default 'draft-7' */
     headers?: HeadersVersion;
     /**
+     * When `true`, include non-standard `X-RateLimit-Limit`,
+     * `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers alongside
+     * the standard headers. Widely used by GitHub, Twitter, etc.
+     * @default false
+     */
+    legacyHeaders?: boolean;
+    /**
      * Custom handler invoked when a request is rate-limited. Return a `Response`
      * to fully control the 429 reply. When omitted, a default response is built
      * from {@link message} and {@link statusCode}.
@@ -147,24 +154,36 @@ function generateHeaders(
     limit: number,
     remaining: number,
     resetTime: Date,
-    windowMs: number
+    windowMs: number,
+    legacyHeaders: boolean
 ): Record<string, string> {
     const resetSeconds = Math.max(0, Math.ceil((resetTime.getTime() - Date.now()) / 1000));
+    const clampedRemaining = String(Math.max(0, remaining));
+
+    let headers: Record<string, string>;
 
     if (version === 'draft-6') {
-        return {
+        headers = {
             'RateLimit-Limit': String(limit),
-            'RateLimit-Remaining': String(Math.max(0, remaining)),
+            'RateLimit-Remaining': clampedRemaining,
             'RateLimit-Reset': String(resetSeconds)
+        };
+    } else {
+        // draft-7: combined headers using Structured Fields
+        const windowSeconds = Math.ceil(windowMs / 1000);
+        headers = {
+            RateLimit: 'limit=' + String(limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
+            'RateLimit-Policy': String(limit) + ';w=' + String(windowSeconds)
         };
     }
 
-    // draft-7: combined headers using Structured Fields
-    const windowSeconds = Math.ceil(windowMs / 1000);
-    return {
-        RateLimit: 'limit=' + String(limit) + ', remaining=' + String(Math.max(0, remaining)) + ', reset=' + String(resetSeconds),
-        'RateLimit-Policy': String(limit) + ';w=' + String(windowSeconds)
-    };
+    if (legacyHeaders) {
+        headers['X-RateLimit-Limit'] = String(limit);
+        headers['X-RateLimit-Remaining'] = clampedRemaining;
+        headers['X-RateLimit-Reset'] = String(resetSeconds);
+    }
+
+    return headers;
 }
 
 // ── MemoryStore ──────────────────────────────────────────────────────────────
@@ -191,8 +210,8 @@ interface WindowEntry {
 export class MemoryStore implements Store {
     private readonly windowMs: number;
     private readonly algorithm: Algorithm;
-    private current = new Map<string, WindowEntry>();
-    private previous = new Map<string, WindowEntry>();
+    private readonly current = new Map<string, WindowEntry>();
+    private readonly previous = new Map<string, WindowEntry>();
     private timer: ReturnType<typeof setInterval> | undefined;
 
     /**
@@ -319,6 +338,7 @@ export function rateLimit<TRequest = Request>(
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
     const algorithm = options.algorithm ?? 'fixed-window';
     const headersVersion = options.headers ?? 'draft-7';
+    const legacyHeaders = options.legacyHeaders ?? false;
     const passOnStoreError = options.passOnStoreError ?? false;
     const skip = options.skip;
     const handler = options.handler;
@@ -336,7 +356,7 @@ export function rateLimit<TRequest = Request>(
                     limit,
                     remaining: limit,
                     resetTime: new Date(Date.now() + windowMs),
-                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs)
+                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs, legacyHeaders)
                 };
             }
         }
@@ -358,7 +378,7 @@ export function rateLimit<TRequest = Request>(
                     limit,
                     remaining: limit,
                     resetTime: new Date(Date.now() + windowMs),
-                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs)
+                    headers: generateHeaders(headersVersion, limit, limit, new Date(Date.now() + windowMs), windowMs, legacyHeaders)
                 };
             }
             throw new Error('Rate limit store error');
@@ -366,7 +386,7 @@ export function rateLimit<TRequest = Request>(
 
         const remaining = limit - totalHits;
         const limited = remaining < 0;
-        const headers = generateHeaders(headersVersion, limit, remaining, resetTime, windowMs);
+        const headers = generateHeaders(headersVersion, limit, remaining, resetTime, windowMs, legacyHeaders);
 
         const result: RateLimitResult = { limited, limit, remaining: Math.max(0, remaining), resetTime, headers };
 

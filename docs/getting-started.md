@@ -24,6 +24,12 @@ npm install @universal-rate-limit/hono
 npm install @universal-rate-limit/nextjs
 ```
 
+For distributed deployments, add the Redis store:
+
+```bash
+npm install @universal-rate-limit/redis
+```
+
 ## Basic Usage
 
 The `rateLimit` function creates a limiter that accepts a Web Standard `Request` and returns a `RateLimitResult`:
@@ -53,19 +59,19 @@ if (result.limited) {
 
 All options are optional with sensible defaults:
 
-| Option             | Type                                 | Default               | Description                             |
-| ------------------ | ------------------------------------ | --------------------- | --------------------------------------- |
-| `windowMs`         | `number`                             | `60_000`              | Time window in milliseconds             |
-| `limit`            | `number \| (req) => number`          | `60`                  | Max requests per window (can be async)  |
-| `algorithm`        | `'fixed-window' \| 'sliding-window'` | `'fixed-window'`      | Rate limiting algorithm                 |
-| `headers`          | `'draft-7' \| 'draft-6'`             | `'draft-7'`           | IETF rate limit headers version         |
-| `store`            | `Store`                              | `MemoryStore`         | Storage backend                         |
-| `keyGenerator`     | `(req) => string`                    | IP-based              | Extract client identifier               |
-| `skip`             | `(req) => boolean`                   | `undefined`           | Skip rate limiting for certain requests |
-| `handler`          | `(req, result) => Response`          | `undefined`           | Custom 429 response handler             |
-| `message`          | `string \| object \| function`       | `'Too Many Requests'` | Response body when limited              |
-| `statusCode`       | `number`                             | `429`                 | HTTP status code when limited           |
-| `passOnStoreError` | `boolean`                            | `false`               | Fail open if the store errors           |
+| Option             | Type                                 | Default               | Description                                            |
+| ------------------ | ------------------------------------ | --------------------- | ------------------------------------------------------ |
+| `windowMs`         | `number`                             | `60_000`              | Time window in milliseconds                            |
+| `limit`            | `number \| (req) => number`          | `60`                  | Max requests per window (can be async)                 |
+| `algorithm`        | `'fixed-window' \| 'sliding-window'` | `'fixed-window'`      | Rate limiting algorithm                                |
+| `headers`          | `'draft-7' \| 'draft-6'`             | `'draft-7'`           | IETF rate limit headers version                        |
+| `store`            | `Store`                              | `MemoryStore`         | Storage backend ([Redis](/stores#redis-store), custom) |
+| `keyGenerator`     | `(req) => string`                    | IP-based              | Extract client identifier                              |
+| `skip`             | `(req) => boolean`                   | `undefined`           | Skip rate limiting for certain requests                |
+| `handler`          | `(req, result) => Response`          | `undefined`           | Custom 429 response handler                            |
+| `message`          | `string \| object \| function`       | `'Too Many Requests'` | Response body when limited                             |
+| `statusCode`       | `number`                             | `429`                 | HTTP status code when limited                          |
+| `passOnStoreError` | `boolean`                            | `false`               | Fail open if the store errors                          |
 
 ## Sliding Window
 

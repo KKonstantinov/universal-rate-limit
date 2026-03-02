@@ -40,74 +40,81 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
         return entry;
     }
 
-    const sendCommand: SendCommandFn = async (...args: string[]): Promise<RedisReply> => {
-        const command = args[0].toUpperCase();
+    function handleScript(args: string[]): RedisReply {
+        const script = args[2];
+        const hash = sha1(script);
+        scripts.set(hash, script);
+        return hash;
+    }
 
-        switch (command) {
-            case 'SCRIPT': {
-                // SCRIPT LOAD <script>
-                const script = args[2];
-                const hash = sha1(script);
-                scripts.set(hash, script);
-                return hash;
-            }
-            case 'EVALSHA': {
-                const evalSha = args[1];
+    function handleEvalsha(args: string[]): RedisReply {
+        const evalSha = args[1];
 
-                if (failNextEvalsha) {
-                    failNextEvalsha = false;
-                    mock.failNextEvalsha = false;
-                    throw new Error('NOSCRIPT No matching script. Please use EVAL.');
-                }
+        if (failNextEvalsha) {
+            failNextEvalsha = false;
+            mock.failNextEvalsha = false;
+            throw new Error('NOSCRIPT No matching script. Please use EVAL.');
+        }
 
-                const script = scripts.get(evalSha);
-                if (!script) {
-                    throw new Error('NOSCRIPT No matching script. Please use EVAL.');
-                }
+        const script = scripts.get(evalSha);
+        if (!script) {
+            throw new Error('NOSCRIPT No matching script. Please use EVAL.');
+        }
 
-                // Parse: EVALSHA <sha> <numkeys> <key> [args...]
-                const numKeys = Number(args[2]);
-                const keys = args.slice(3, 3 + numKeys);
-                const argv = args.slice(3 + numKeys);
+        const numKeys = Number(args[2]);
+        const keys = args.slice(3, 3 + numKeys);
+        const argv = args.slice(3 + numKeys);
+        return executeLuaScript(script, keys, argv);
+    }
 
-                return executeLuaScript(script, keys, argv);
-            }
-            case 'DECR': {
-                const key = args[1];
+    function handleDecr(args: string[]): RedisReply {
+        const key = args[1];
+        const entry = getEntry(key);
+        if (!entry) {
+            store.set(key, { value: '-1', expiresAt: -1 });
+            return -1;
+        }
+        const newVal = Number(entry.value) - 1;
+        entry.value = String(newVal);
+        return newVal;
+    }
+
+    function handleDel(args: string[]): RedisReply {
+        let deleted = 0;
+        for (let i = 1; i < args.length; i++) {
+            if (store.delete(args[i])) deleted++;
+        }
+        return deleted;
+    }
+
+    function handleScan(args: string[]): RedisReply {
+        const pattern = args[3];
+        const prefix = pattern.replace('*', '');
+        const matchingKeys: string[] = [];
+        for (const key of store.keys()) {
+            if (key.startsWith(prefix)) {
                 const entry = getEntry(key);
-                if (!entry) {
-                    store.set(key, { value: '-1', expiresAt: -1 });
-                    return -1;
-                }
-                const newVal = Number(entry.value) - 1;
-                entry.value = String(newVal);
-                return newVal;
-            }
-            case 'DEL': {
-                let deleted = 0;
-                for (let i = 1; i < args.length; i++) {
-                    if (store.delete(args[i])) deleted++;
-                }
-                return deleted;
-            }
-            case 'SCAN': {
-                // SCAN <cursor> MATCH <pattern> COUNT <count>
-                const pattern = args[3];
-                const prefix = pattern.replace('*', '');
-                const matchingKeys: string[] = [];
-                for (const key of store.keys()) {
-                    if (key.startsWith(prefix)) {
-                        const entry = getEntry(key);
-                        if (entry) matchingKeys.push(key);
-                    }
-                }
-                // Return all matching keys in one batch (cursor "0" = done)
-                return ['0', matchingKeys];
-            }
-            default: {
-                throw new Error(`Mock Redis: unsupported command "${command}"`);
+                if (entry) matchingKeys.push(key);
             }
         }
+        return ['0', matchingKeys];
+    }
+
+    const commandHandlers: Partial<Record<string, (args: string[]) => RedisReply>> = {
+        SCRIPT: handleScript,
+        EVALSHA: handleEvalsha,
+        DECR: handleDecr,
+        DEL: handleDel,
+        SCAN: handleScan
+    };
+
+    const sendCommand: SendCommandFn = async (...args: string[]): Promise<RedisReply> => {
+        const command = args[0].toUpperCase();
+        const handler = commandHandlers[command];
+        if (!handler) {
+            throw new Error(`Mock Redis: unsupported command "${command}"`);
+        }
+        return handler(args);
     };
 
     function executeLuaScript(script: string, keys: string[], argv: string[]): RedisReply {

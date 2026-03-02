@@ -19,7 +19,7 @@ features:
     - title: Web Standards
       details: Built on Request/Response APIs — runs on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge.
     - title: Pluggable Stores
-      details: MemoryStore included. Implement the Store interface for Redis, KV, or any backend.
+      details: MemoryStore built-in, RedisStore for distributed deployments. Implement the Store interface for KV or any backend.
     - title: Framework Middleware
       details: Drop-in support for Express, Fastify, Hono, and Next.js with framework-native APIs.
     - title: Sliding Window
@@ -68,28 +68,22 @@ import { honoRateLimit } from '@universal-rate-limit/hono';
 app.use(honoRateLimit({ windowMs: 60_000, limit: 60 }));
 ```
 
-## Custom Stores
+## Redis Store
 
-Bring your own storage backend:
+Scale across multiple instances with the official Redis store:
 
 ```ts
-import type { Store } from 'universal-rate-limit';
+import { rateLimit } from 'universal-rate-limit';
+import { RedisStore } from '@universal-rate-limit/redis';
 
-class RedisStore implements Store {
-    async increment(key: string) {
-        // Your Redis logic here
-        return { totalHits: count, resetTime: new Date(reset) };
-    }
-    async decrement(key: string) {
-        /* ... */
-    }
-    async resetKey(key: string) {
-        /* ... */
-    }
-    async resetAll() {
-        /* ... */
-    }
-}
+const limiter = rateLimit({
+    windowMs: 60_000,
+    limit: 60,
+    store: new RedisStore({
+        sendCommand: (...args) => redis.call(...args),
+        windowMs: 60_000
+    })
+});
 ```
 
 ## Packages
@@ -97,7 +91,13 @@ class RedisStore implements Store {
 | Package                                                                                        | Description                |
 | ---------------------------------------------------------------------------------------------- | -------------------------- |
 | [`universal-rate-limit`](https://www.npmjs.com/package/universal-rate-limit)                   | Core rate limiting library |
+| [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis)     | Redis store                |
 | [`@universal-rate-limit/express`](https://www.npmjs.com/package/@universal-rate-limit/express) | Express middleware         |
 | [`@universal-rate-limit/fastify`](https://www.npmjs.com/package/@universal-rate-limit/fastify) | Fastify plugin             |
 | [`@universal-rate-limit/hono`](https://www.npmjs.com/package/@universal-rate-limit/hono)       | Hono middleware            |
 | [`@universal-rate-limit/nextjs`](https://www.npmjs.com/package/@universal-rate-limit/nextjs)   | Next.js App Router wrapper |
+
+## Acknowledgements
+
+Inspired by [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) — the most popular rate limiting middleware for Express.js. universal-rate-limit builds on its proven API design while extending it to work across frameworks and runtimes with Web Standard
+APIs.

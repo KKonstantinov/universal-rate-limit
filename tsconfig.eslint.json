@@ -14,6 +14,8 @@
         "packages/middleware/*/src",
         "packages/middleware/*/test",
         "packages/middleware/*/*.config.ts",
+        "packages/benchmarks/src",
+        "packages/benchmarks/*.config.ts",
         "tests/integration",
         "*.config.ts"
     ],

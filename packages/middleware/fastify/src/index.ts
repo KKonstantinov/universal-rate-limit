@@ -40,7 +40,7 @@ function rateLimitPlugin(fastify: FastifyInstance, options: FastifyRateLimitOpti
 
         // Set rate limit headers
         for (const [key, value] of Object.entries(result.headers)) {
-            void reply.header(key, value);
+            reply.header(key, value);
         }
 
         if (result.limited) {

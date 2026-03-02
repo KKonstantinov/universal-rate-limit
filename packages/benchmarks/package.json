@@ -1,0 +1,25 @@
+{
+    "name": "@universal-rate-limit/benchmarks",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "build": "tsdown",
+        "bench": "node dist/throughput.mjs && node dist/store-only.mjs && node --expose-gc dist/memory.mjs && node dist/express-middleware.mjs",
+        "bench:throughput": "node dist/throughput.mjs",
+        "bench:store": "node dist/store-only.mjs",
+        "bench:memory": "node --expose-gc dist/memory.mjs",
+        "bench:http": "node dist/express-middleware.mjs"
+    },
+    "dependencies": {
+        "universal-rate-limit": "workspace:*",
+        "@universal-rate-limit/express": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/express": "^5.0.0",
+        "express": "^5.2.1",
+        "express-rate-limit": "^8.2.1"
+    }
+}

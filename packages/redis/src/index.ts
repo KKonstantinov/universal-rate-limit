@@ -1,3 +1,4 @@
+import type { Store, IncrementResult } from 'universal-rate-limit';
 import { INCREMENT_SCRIPT } from './scripts.js';
 
 // ── Re-exports from core ────────────────────────────────────────────────────
@@ -74,13 +75,13 @@ function parseScriptResult(reply: RedisReply, windowMs: number): { totalHits: nu
  * });
  * ```
  */
-export class RedisStore {
+export class RedisStore implements Store {
     private readonly sendCommand: SendCommandFn;
     private readonly windowMs: number;
     private readonly prefix: string;
     private readonly resetExpiryOnChange: boolean;
 
-    private incrementShaPromise: Promise<string>;
+    private incrementShaPromise: Promise<string> | undefined;
 
     /** @param options - Redis store configuration. */
     constructor(options: RedisStoreOptions) {
@@ -88,18 +89,18 @@ export class RedisStore {
         this.windowMs = options.windowMs;
         this.prefix = options.prefix ?? 'rl:';
         this.resetExpiryOnChange = options.resetExpiryOnChange ?? false;
-
-        // Eagerly load Lua script
-        this.incrementShaPromise = this.loadScript(INCREMENT_SCRIPT);
     }
 
     /**
      * Atomically increment the hit counter for `key` using a Lua script.
      * If the key does not exist, it is created with a TTL of {@link RedisStoreOptions.windowMs}.
      */
-    async increment(key: string): Promise<{ totalHits: number; resetTime: Date }> {
+    async increment(key: string): Promise<IncrementResult> {
         const fullKey = this.prefix + key;
         const args = [fullKey, String(this.windowMs), this.resetExpiryOnChange ? '1' : '0'];
+
+        // Lazy-load the Lua script on first call
+        this.incrementShaPromise ??= this.loadScript(INCREMENT_SCRIPT);
 
         try {
             const sha = await this.incrementShaPromise;
