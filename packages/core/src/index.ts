@@ -1,47 +1,125 @@
 // ── Types ────────────────────────────────────────────────────────────────────
 
+/** The result of a store increment operation. */
 export interface IncrementResult {
+    /** Total number of hits recorded in the current window for a given key. */
     totalHits: number;
+    /** The time at which the current rate limit window resets. */
     resetTime: Date;
 }
 
+/**
+ * Backend store interface for persisting rate limit hit counts.
+ *
+ * Implementations must be safe for concurrent access. The built-in
+ * {@link MemoryStore} is suitable for single-process deployments;
+ * use a Redis-backed store for distributed environments.
+ */
 export interface Store {
+    /** Increment the hit count for `key` and return the updated totals. */
     increment(key: string): Promise<IncrementResult>;
+    /** Decrement the hit count for `key` (e.g. to undo a counted request). */
     decrement(key: string): Promise<void>;
+    /** Remove all rate limit data for a single `key`. */
     resetKey(key: string): Promise<void>;
+    /** Remove all rate limit data for every key in the store. */
     resetAll(): Promise<void>;
 }
 
+/**
+ * The windowing algorithm used to count requests.
+ *
+ * - `'fixed-window'` — resets the counter at fixed intervals.
+ * - `'sliding-window'` — smooths burst edges by weighting the previous
+ *   window's count into the current window.
+ */
 export type Algorithm = 'fixed-window' | 'sliding-window';
 
+/**
+ * The IETF RateLimit header draft version to emit.
+ *
+ * - `'draft-6'` — separate `RateLimit-Limit`, `RateLimit-Remaining`, and
+ *   `RateLimit-Reset` headers.
+ * - `'draft-7'` — combined `RateLimit` and `RateLimit-Policy` headers using
+ *   Structured Fields syntax.
+ */
 export type HeadersVersion = 'draft-6' | 'draft-7';
 
-export interface RateLimitOptions {
+/** Configuration options for the rate limiter. */
+export interface RateLimitOptions<TRequest = Request> {
+    /** Duration of the rate limit window in milliseconds. @default 60_000 */
     windowMs?: number;
-    limit?: number | ((request: Request) => number | Promise<number>);
-    keyGenerator?: (request: Request) => string | Promise<string>;
+    /**
+     * Maximum number of requests allowed per window. Can be a static number
+     * or an async function that resolves per-request (useful for per-user limits).
+     * @default 60
+     */
+    limit?: number | ((request: TRequest) => number | Promise<number>);
+    /**
+     * Function that derives a unique key for the incoming request.
+     * Requests sharing the same key share a rate limit counter.
+     * @default IP-based key extracted from common proxy headers
+     */
+    keyGenerator?: (request: TRequest) => string | Promise<string>;
+    /**
+     * The backing store used to track hit counts. When omitted, an in-memory
+     * {@link MemoryStore} is created automatically.
+     */
     store?: Store;
+    /** The windowing algorithm. @default 'fixed-window' */
     algorithm?: Algorithm;
+    /** The IETF RateLimit header draft version to emit. @default 'draft-7' */
     headers?: HeadersVersion;
-    handler?: (request: Request, result: RateLimitResult) => Response | Promise<Response>;
-    message?: string | Record<string, unknown> | ((request: Request, result: RateLimitResult) => string | Record<string, unknown>);
+    /**
+     * Custom handler invoked when a request is rate-limited. Return a `Response`
+     * to fully control the 429 reply. When omitted, a default response is built
+     * from {@link message} and {@link statusCode}.
+     */
+    handler?: (request: TRequest, result: RateLimitResult) => Response | Promise<Response>;
+    /**
+     * The body sent when a request is rate-limited. Can be a plain string, a
+     * JSON-serializable object, or an async function returning either.
+     * @default 'Too Many Requests'
+     */
+    message?: string | Record<string, unknown> | ((request: TRequest, result: RateLimitResult) => string | Record<string, unknown>);
+    /** HTTP status code for rate-limited responses. @default 429 */
     statusCode?: number;
-    skip?: (request: Request) => boolean | Promise<boolean>;
+    /**
+     * Return `true` to bypass rate limiting for the given request.
+     * Skipped requests receive full remaining quota in their headers.
+     */
+    skip?: (request: TRequest) => boolean | Promise<boolean>;
+    /**
+     * When `true`, store errors are swallowed and the request is allowed
+     * through (fail-open). When `false`, store errors propagate as exceptions.
+     * @default false
+     */
     passOnStoreError?: boolean;
 }
 
+/** The outcome of evaluating a request against the rate limiter. */
 export interface RateLimitResult {
+    /** Whether the request exceeded the allowed limit. */
     limited: boolean;
+    /** The maximum number of requests allowed in the current window. */
     limit: number;
+    /** How many requests remain before the limit is reached. */
     remaining: number;
+    /** The time at which the current rate limit window resets. */
     resetTime: Date;
+    /** Pre-formatted RateLimit headers to attach to the response. */
     headers: Record<string, string>;
 }
 
 // ── Default key generator ────────────────────────────────────────────────────
 
+/** Common proxy/CDN headers that carry the client's real IP address. */
 const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
 
+/**
+ * Default key generator that extracts the client IP from well-known proxy
+ * headers. Falls back to `'127.0.0.1'` when no header is present.
+ */
 function defaultKeyGenerator(request: Request): string {
     for (const header of IP_HEADERS) {
         const value = request.headers.get(header);
@@ -54,6 +132,16 @@ function defaultKeyGenerator(request: Request): string {
 
 // ── Header generation ────────────────────────────────────────────────────────
 
+/**
+ * Build RateLimit response headers according to the specified IETF draft version.
+ *
+ * @param version - The header draft format to use.
+ * @param limit - Maximum allowed requests in the window.
+ * @param remaining - Remaining requests before the limit is hit.
+ * @param resetTime - Absolute time when the window resets.
+ * @param windowMs - Window duration in milliseconds (used by draft-7 policy).
+ * @returns A plain object of header name/value pairs.
+ */
 function generateHeaders(
     version: HeadersVersion,
     limit: number,
@@ -81,11 +169,25 @@ function generateHeaders(
 
 // ── MemoryStore ──────────────────────────────────────────────────────────────
 
+/** Internal bookkeeping for a single key inside a time window. */
 interface WindowEntry {
+    /** Number of requests recorded in this window. */
     hits: number;
+    /** Unix-ms timestamp at which this window expires. */
     resetTime: number;
 }
 
+/**
+ * In-memory {@link Store} implementation backed by two rotating `Map`s.
+ *
+ * Supports both `fixed-window` and `sliding-window` algorithms. A background
+ * interval rotates expired entries automatically. Call {@link shutdown} to
+ * clear the interval when the store is no longer needed.
+ *
+ * **Note:** This store is per-process — it is not shared across cluster
+ * workers or server instances. Use a Redis-backed store for distributed
+ * deployments.
+ */
 export class MemoryStore implements Store {
     private readonly windowMs: number;
     private readonly algorithm: Algorithm;
@@ -93,6 +195,10 @@ export class MemoryStore implements Store {
     private previous = new Map<string, WindowEntry>();
     private timer: ReturnType<typeof setInterval> | undefined;
 
+    /**
+     * @param windowMs - Duration of the rate limit window in milliseconds.
+     * @param algorithm - The windowing algorithm to use.
+     */
     constructor(windowMs: number, algorithm: Algorithm) {
         this.windowMs = windowMs;
         this.algorithm = algorithm;
@@ -107,6 +213,7 @@ export class MemoryStore implements Store {
         }
     }
 
+    /** @inheritdoc */
     increment(key: string): Promise<IncrementResult> {
         const now = Date.now();
         const windowStart = Math.floor(now / this.windowMs) * this.windowMs;
@@ -136,6 +243,7 @@ export class MemoryStore implements Store {
         return Promise.resolve({ totalHits: entry.hits, resetTime: new Date(entry.resetTime) });
     }
 
+    /** @inheritdoc */
     decrement(key: string): Promise<void> {
         const entry = this.current.get(key);
         if (entry && entry.hits > 0) {
@@ -144,18 +252,21 @@ export class MemoryStore implements Store {
         return Promise.resolve();
     }
 
+    /** @inheritdoc */
     resetKey(key: string): Promise<void> {
         this.current.delete(key);
         this.previous.delete(key);
         return Promise.resolve();
     }
 
+    /** @inheritdoc */
     resetAll(): Promise<void> {
         this.current.clear();
         this.previous.clear();
         return Promise.resolve();
     }
 
+    /** Stop the background cleanup interval. Call this when the store is no longer needed. */
     shutdown(): void {
         if (this.timer) {
             clearInterval(this.timer);
@@ -163,6 +274,7 @@ export class MemoryStore implements Store {
         }
     }
 
+    /** Rotate expired entries from `current` into `previous` and evict stale `previous` entries. */
     private cleanup(): void {
         const now = Date.now();
         for (const [key, entry] of this.current) {
@@ -181,10 +293,30 @@ export class MemoryStore implements Store {
 
 // ── rateLimit factory ────────────────────────────────────────────────────────
 
-export function rateLimit(options: RateLimitOptions = {}): (request: Request) => Promise<RateLimitResult> {
+/**
+ * Create a framework-agnostic rate limiter function.
+ *
+ * Returns an async function that accepts a Web API {@link Request} and
+ * resolves to a {@link RateLimitResult} indicating whether the request
+ * should be allowed or rejected.
+ *
+ * @param options - Configuration for the rate limiter. All fields are optional
+ *   and have sensible defaults (60 requests per 60 s, fixed-window, in-memory store).
+ * @returns An async function `(request: Request) => Promise<RateLimitResult>`.
+ *
+ * @example
+ * ```ts
+ * const limiter = rateLimit({ windowMs: 15 * 60_000, limit: 100 });
+ * const result = await limiter(request);
+ * if (result.limited) { \/* reject *\/ }
+ * ```
+ */
+export function rateLimit<TRequest = Request>(
+    options: RateLimitOptions<TRequest> = {} as RateLimitOptions<TRequest>
+): (request: TRequest) => Promise<RateLimitResult> {
     const windowMs = options.windowMs ?? 60_000;
     const limitOption = options.limit ?? 60;
-    const keyGenerator = options.keyGenerator ?? defaultKeyGenerator;
+    const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
     const algorithm = options.algorithm ?? 'fixed-window';
     const headersVersion = options.headers ?? 'draft-7';
     const passOnStoreError = options.passOnStoreError ?? false;
@@ -193,7 +325,7 @@ export function rateLimit(options: RateLimitOptions = {}): (request: Request) =>
 
     const store = options.store ?? new MemoryStore(windowMs, algorithm);
 
-    return async (request: Request): Promise<RateLimitResult> => {
+    return async (request: TRequest): Promise<RateLimitResult> => {
         // Check skip
         if (skip) {
             const shouldSkip = await skip(request);
@@ -249,12 +381,25 @@ export function rateLimit(options: RateLimitOptions = {}): (request: Request) =>
 
 // ── buildResponse helper (used by middleware adapters) ────────────────────────
 
-export async function buildRateLimitResponse(
-    request: Request,
+/**
+ * Build a complete HTTP `Response` for a rate-limited request.
+ *
+ * Middleware adapters call this when {@link RateLimitResult.limited} is `true`.
+ * If a custom {@link RateLimitOptions.handler | handler} is provided it takes
+ * full control; otherwise a response is constructed from `message` and
+ * `statusCode`.
+ *
+ * @param request - The original incoming request.
+ * @param result - The rate limit evaluation result.
+ * @param options - Response-building options (handler, message, statusCode).
+ * @returns A `Response` ready to send back to the client.
+ */
+export async function buildRateLimitResponse<TRequest = Request>(
+    request: TRequest,
     result: RateLimitResult,
     options: {
-        handler?: (request: Request, result: RateLimitResult) => Response | Promise<Response>;
-        message?: string | Record<string, unknown> | ((request: Request, result: RateLimitResult) => string | Record<string, unknown>);
+        handler?: (request: TRequest, result: RateLimitResult) => Response | Promise<Response>;
+        message?: string | Record<string, unknown> | ((request: TRequest, result: RateLimitResult) => string | Record<string, unknown>);
         statusCode?: number;
     }
 ): Promise<Response> {

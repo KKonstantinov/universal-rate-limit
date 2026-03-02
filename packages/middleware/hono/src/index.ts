@@ -4,10 +4,27 @@ import type { RateLimitOptions } from 'universal-rate-limit';
 
 export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
 
-export interface HonoRateLimitOptions extends RateLimitOptions {
-    keyGenerator?: (request: Request) => string | Promise<string>;
-}
+/** Rate limit options for the Hono middleware adapter. */
+export type HonoRateLimitOptions = RateLimitOptions;
 
+/**
+ * Create a Hono rate-limiting middleware.
+ *
+ * Attaches `RateLimit-*` headers to every response and automatically
+ * sends a `429` reply when the client exceeds the configured limit.
+ *
+ * @param options - Rate limit configuration (see {@link HonoRateLimitOptions}).
+ * @returns A Hono {@link MiddlewareHandler}.
+ *
+ * @example
+ * ```ts
+ * import { Hono } from 'hono';
+ * import { honoRateLimit } from '@universal-rate-limit/hono';
+ *
+ * const app = new Hono();
+ * app.use('*', honoRateLimit({ windowMs: 60_000, limit: 100 }));
+ * ```
+ */
 export function honoRateLimit(options: HonoRateLimitOptions = {}): MiddlewareHandler {
     const limiter = rateLimit(options);
 
