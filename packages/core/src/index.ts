@@ -399,6 +399,8 @@ export function rateLimit<TRequest = Request>(
         return { limited, limit, remaining: Math.max(0, remaining), resetTime: incrementResult.resetTime, headers };
     }
 
+    // Not async on purpose — when the store is synchronous (e.g. MemoryStore),
+    // this avoids wrapping the result in a Promise and the associated microtask overhead.
     function runIncrement(key: string, limit: number, now: number): RateLimitResult | Promise<RateLimitResult> {
         try {
             const incrementResult = store.increment(key);
@@ -435,6 +437,8 @@ export function rateLimit<TRequest = Request>(
         return runIncrement(key, limit, now);
     }
 
+    // Not async on purpose — when all inputs (key, limit, store) are synchronous,
+    // this returns a plain RateLimitResult with no Promise/microtask overhead.
     return (request: TRequest): RateLimitResult | Promise<RateLimitResult> => {
         // Fast path: no skip, static limit, sync keyGenerator, sync store
         if (skip) {

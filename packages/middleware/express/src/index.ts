@@ -97,6 +97,8 @@ export function expressRateLimit(options: ExpressRateLimitOptions = {}): Request
     };
     const limiter = rateLimit<ExpressRequest>(resolvedOptions);
 
+    // Not async on purpose — when the core limiter returns synchronously
+    // (e.g. MemoryStore), this avoids wrapping every request in a Promise.
     return (req: ExpressRequest, res: ExpressResponse, next: NextFunction): void => {
         const result = limiter(req);
 
