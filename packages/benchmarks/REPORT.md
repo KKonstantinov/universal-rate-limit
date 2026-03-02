@@ -6,16 +6,16 @@
 
 ## Summary
 
-| Metric                             | @universal-rate-limit/express | express-rate-limit | Difference           |
-| ---------------------------------- | ----------------------------- | ------------------ | -------------------- |
-| Bundle size (ESM, raw)             | **11.0 KB**                   | 32.4 KB            | **2.9x smaller**     |
-| Bundle size (ESM, gzip)            | **4.2 KB**                    | 8.8 KB             | **2.1x smaller**     |
-| Runtime dependencies               | **0**                         | 1 (`ip-address`)   | —                    |
-| Middleware throughput (multi-key)  | **1,870K ops/sec**            | 1,424K ops/sec     | **1.31x faster**     |
-| Middleware throughput (single-key) | **1,993K ops/sec**            | 1,487K ops/sec     | **1.34x faster**     |
-| Memory per key (100K keys)         | **124 B/key**                 | 207 B/key          | **1.7x less memory** |
-| Memory total (100K keys)           | **11.8 MB**                   | 19.7 MB            | **1.7x less memory** |
-| HTTP req/sec (real Express server) | 14,708 req/sec                | 15,657 req/sec     | 0.94x (see note)     |
+| Metric                             | @universal-rate-limit/express | express-rate-limit | Difference                 |
+| ---------------------------------- | ----------------------------- | ------------------ | -------------------------- |
+| Bundle size (ESM, raw)             | **13.2 KB**                   | 32.4 KB            | **2.4x smaller**           |
+| Bundle size (ESM, gzip)            | **4.7 KB**                    | 8.8 KB             | **1.9x smaller**           |
+| Runtime dependencies               | **0**                         | 1 (`ip-address`)   | —                          |
+| Middleware throughput (multi-key)  | **3,582K ops/sec**            | 1,453K ops/sec     | **2.47x faster**           |
+| Middleware throughput (single-key) | **3,886K ops/sec**            | 1,499K ops/sec     | **2.59x faster**           |
+| Memory per key (100K keys)         | 228 B/key                     | **207 B/key**      | 1.10x more memory (see §4) |
+| Memory total (100K keys)           | 21.76 MB                      | **19.73 MB**       | 1.10x more memory (see §4) |
+| HTTP req/sec (real Express server) | 16,155 req/sec                | 16,057 req/sec     | ~1.01x (within noise)      |
 
 ---
 
@@ -25,12 +25,12 @@ Both libraries were measured using their published ESM dist bundles.
 
 ```
 @universal-rate-limit/express (core + adapter):
-  packages/core/dist/index.mjs          8,903 B  (3,112 B gzip)
-  packages/middleware/express/dist/      2,124 B  (1,040 B gzip)
-  Combined:                            11,027 B  (4,152 B gzip)
+  packages/core/dist/index.mjs          10,367 B  (3,485 B gzip)
+  packages/middleware/express/dist/       2,860 B  (1,232 B gzip)
+  Combined:                             13,227 B  (4,717 B gzip)
 
 express-rate-limit:
-  dist/index.mjs                       32,374 B  (8,803 B gzip)
+  dist/index.mjs                        32,374 B  (8,803 B gzip)
 ```
 
 **How measured:** Raw byte count of built `.mjs` files via `wc -c`, gzip via `gzip -c | wc -c`.
@@ -53,24 +53,32 @@ Both libraries were tested as Express middleware using identical mock `req`/`res
 
 ```
 Express Middleware Throughput Benchmark
+======================================================================
 Operations: 100,000 | Warmup: 10,000 | Keys: 1000
 
+Results:
+----------------------------------------------------------------------
 Middleware                                    ops/sec   avg (µs)   total (ms)
-@universal-rate-limit/express               1,870,438       0.53         53.5
-express-rate-limit                          1,423,567       0.70         70.2
-@universal-rate-limit/express (single key)  1,992,818       0.50         50.2
-express-rate-limit (single key)             1,486,716       0.67         67.3
+----------------------------------------------------------------------
+@universal-rate-limit/express               3,581,817       0.28         27.9
+express-rate-limit                          1,452,780       0.69         68.8
+@universal-rate-limit/express (single key)  3,886,080       0.26         25.7
+express-rate-limit (single key)             1,498,610       0.67         66.7
+----------------------------------------------------------------------
 ```
 
-**How measured:** `benchmarks/throughput.mjs` — each iteration creates a mock Express request with an IP from a pool of 1,000 keys, passes it through the middleware, and calls `next()`. Wall-clock time measured via `performance.now()`. 10,000 warmup iterations discarded to
-stabilize JIT. Both libraries configured identically: 60s window, draft-7 headers, in-memory store. `express-rate-limit` validations disabled (`validate: false`) for fairness since universal-rate-limit doesn't have runtime validation overhead.
+**How measured:** `pnpm bench:throughput` — each iteration creates a mock Express request with an IP from a pool of 1,000 keys, passes it through the middleware, and calls `next()`. Wall-clock time measured via `performance.now()`. 10,000 warmup iterations discarded to stabilize
+JIT. Both libraries configured identically: 60s window, draft-7 headers, in-memory store. `express-rate-limit` validations disabled (`validate: false`) for fairness since universal-rate-limit doesn't have runtime validation overhead.
 
 ### Why it's faster
 
-- Simpler code path: fewer function calls, no runtime validation checks, no `Object.defineProperty` to attach rate limit info to the request
-- No `async keyGenerator` in the default path — universal-rate-limit's Express adapter uses a synchronous key generator by default
-- No per-request validation state management — express-rate-limit maintains a `WeakMap<Request, Map>` for single-count deduplication and calls `config.validations.disable()` at the end of each request
-- Configuration resolved once at creation, not per-request
+- **Fully synchronous hot path:** When the store is synchronous (MemoryStore), key generator is synchronous, and limit is static, the entire middleware executes without creating any Promises. Express-rate-limit always wraps everything in `handleAsyncErrors` with `async/await`,
+  forcing a microtask queue round-trip on every request even for synchronous stores.
+- **No runtime validation:** express-rate-limit runs 9+ validation checks per request (`validations.ip`, `validations.trustProxy`, `validations.xForwardedForHeader`, `validations.forwardedHeader`, `validations.positiveHits`, `validations.singleCount`, `validations.limit`,
+  `validations.headersResetTime`, `validations.disable`). universal-rate-limit has zero per-request validation.
+- **No `Object.defineProperty`:** express-rate-limit uses `Object.defineProperty` to attach `current` to the rate limit info object on every request — a slow operation. universal-rate-limit skips this entirely.
+- **No `WeakMap` lookups:** express-rate-limit maintains a `WeakMap<Request, Map>` (`singleCountKeys`) to ensure each key is only incremented once per request, adding a WeakMap lookup on every request.
+- **Configuration resolved once:** All config (limit, window, key generator) is resolved at creation time. express-rate-limit re-evaluates some config per-request (skip function, async key generator, limit function).
 
 ---
 
@@ -80,18 +88,23 @@ Isolates the store's `increment()` method from all middleware logic.
 
 ```
 MemoryStore.increment() Benchmark
+======================================================================
 Operations: 500,000 | Warmup: 50,000 | Keys: 1000
 
+Results:
+----------------------------------------------------------------------
 Store                                         ops/sec   avg (ns)   total (ms)
-universal-rate-limit MemoryStore           10,466,081         96         47.8
-express-rate-limit MemoryStore             12,428,922         80         40.2
-universal MemoryStore (sliding window)      9,510,570        105         52.6
+----------------------------------------------------------------------
+universal-rate-limit MemoryStore           12,482,615         80         40.1
+express-rate-limit MemoryStore             11,361,076         88         44.0
+universal MemoryStore (sliding window)     11,611,671         86         43.1
+----------------------------------------------------------------------
 ```
 
-**How measured:** `benchmarks/store-only.mjs` — direct calls to `store.increment(key)` with string keys from a pool of 1,000. No request objects, no middleware, no headers.
+**How measured:** `pnpm bench:store` — direct calls to `store.increment(key)` with string keys from a pool of 1,000. No request objects, no middleware, no headers.
 
-**Note:** express-rate-limit's MemoryStore is ~19% faster at raw increments. This is because universal-rate-limit's store computes window boundaries via `Math.floor(now / windowMs) * windowMs` on every increment for alignment, while express-rate-limit's store simply checks
-`resetTime <= now`. However, this difference is absorbed by the middleware layer — universal-rate-limit's leaner middleware path more than compensates, resulting in higher end-to-end throughput (see Section 2).
+**Note:** Raw store performance is essentially at parity between the two libraries (~10% difference, within run-to-run variance). In some runs express-rate-limit's store is marginally faster due to its simpler resetTime check (`resetTime <= now`) vs universal-rate-limit's window
+boundary computation (`Math.floor(now / windowMs) * windowMs`). The middleware layer is where the significant performance difference emerges — see Section 2.
 
 ---
 
@@ -101,19 +114,31 @@ Measures heap consumption after populating the store with 100,000 unique keys.
 
 ```
 Memory Usage Benchmark
+============================================================
 Keys: 100,000 | Window: 60000ms
 
+Results:
+------------------------------------------------------------
 Store                                    Total      Per Key
-universal-rate-limit MemoryStore      11.84 MB  124.12864 B
-express-rate-limit MemoryStore        19.73 MB  206.87992 B
+------------------------------------------------------------
+universal-rate-limit MemoryStore      21.76 MB  228.12 B
+express-rate-limit MemoryStore        19.73 MB  206.88 B
+------------------------------------------------------------
 ```
 
-**How measured:** `benchmarks/memory.mjs` — run with `node --expose-gc`. Forced GC before and after populating the store, measured `process.memoryUsage().heapUsed` delta.
+**How measured:** `pnpm bench:memory` — run with `node --expose-gc`. Forced GC before and after populating the store, measured `process.memoryUsage().heapUsed` delta.
 
-### Why it uses less memory
+### Why it uses more memory
 
-- universal-rate-limit stores `{ hits: number, resetTime: number }` — two plain numeric primitives per key
-- express-rate-limit stores `{ totalHits: number, resetTime: Date }` — `Date` objects are heap-allocated with higher overhead than a plain number timestamp (~83 extra bytes per key)
+universal-rate-limit's MemoryStore uses **~10% more memory per key** than express-rate-limit. This is because:
+
+- universal-rate-limit stores three fields per entry: `{ hits: number, resetTime: number, resetDate: Date }` — both a numeric timestamp (used for fast window boundary math) and a cached `Date` object (returned in the `IncrementResult` to avoid allocating a new Date on every
+  request)
+- express-rate-limit stores two fields: `{ totalHits: number, resetTime: Date }` — a single Date object per key
+- universal-rate-limit also maintains two internal Maps (`current` and `previous`) to support the sliding window algorithm, even when running in fixed-window mode. This adds Map overhead for keys that span a window rotation.
+
+This is a deliberate trade-off: the extra `resetTime` number enables the fast `Math.floor` window alignment that underpins fixed-window correctness, and the dual-map structure is required for sliding-window support. The ~21 bytes/key cost is small compared to the 2.5x middleware
+throughput gain.
 
 ---
 
@@ -123,16 +148,32 @@ Full end-to-end test with actual Express servers and HTTP requests via `fetch()`
 
 ```
 Express Middleware HTTP Benchmark
-Requests: 10,000 | Warmup: 1,000
+======================================================================
+Requests: 10,000 | Warmup: 3,000 | Rounds: 3
 
-Library                                req/sec   avg (ms)   total (ms)
-@universal-rate-limit/express           14,708      0.068          680
-express-rate-limit                      15,657      0.064          639
+Per-round details:
+----------------------------------------------------------------------
+Round    Library                                req/sec   avg (ms)
+----------------------------------------------------------------------
+1        @universal-rate-limit/express           14,916      0.067
+         express-rate-limit                      15,605      0.064
+2        @universal-rate-limit/express           16,155      0.062
+         express-rate-limit                      16,057      0.062
+3        @universal-rate-limit/express           16,327      0.061
+         express-rate-limit                      16,157      0.062
+
+Median results:
+----------------------------------------------------------------------
+Library                                req/sec
+----------------------------------------------------------------------
+@universal-rate-limit/express           16,155
+express-rate-limit                      16,057
+----------------------------------------------------------------------
 ```
 
-**How measured:** `benchmarks/express-middleware.mjs` — two Express servers on localhost, sequential `fetch()` requests. Each request goes through the full Express pipeline, rate limiter, and response.
+**How measured:** `pnpm bench:http` — two Express servers on localhost, sequential `fetch()` requests. Each request goes through the full Express pipeline, rate limiter, and response.
 
-**Note:** In real HTTP benchmarks, the rate limiter accounts for a tiny fraction of total request time. The ~6% difference here is within noise range and dominated by Express routing, TCP/HTTP overhead, and `fetch()` latency. Both libraries add negligible overhead to real HTTP
+**Note:** In real HTTP benchmarks, the rate limiter accounts for a tiny fraction of total request time. The ~1% difference here is within noise range and dominated by Express routing, TCP/HTTP overhead, and `fetch()` latency. Both libraries add negligible overhead to real HTTP
 traffic. The synthetic middleware benchmark (Section 2) is a better measure of the rate limiter's own performance.
 
 ---
