@@ -1,5 +1,7 @@
 packages:
-    - 'packages/core'
-    - 'packages/redis'
-    - 'packages/middleware/*'
-    - 'packages/benchmarks'
+    - packages/core
+    - packages/redis
+    - packages/middleware/*
+    - packages/benchmarks
+
+onlyBuiltDependencies: '["lefthook", "esbuild"]'

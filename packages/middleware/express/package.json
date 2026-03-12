@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/express",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "description": "Express middleware for universal-rate-limit",
     "type": "module",
     "sideEffects": false,
@@ -51,7 +51,8 @@
         "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
     },
     "publishConfig": {
-        "access": "public"
+        "access": "public",
+        "provenance": true
     },
     "license": "MIT"
 }

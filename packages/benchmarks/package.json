@@ -14,12 +14,12 @@
         "bench:http": "node dist/express-middleware.mjs"
     },
     "dependencies": {
-        "universal-rate-limit": "workspace:*",
-        "@universal-rate-limit/express": "workspace:*"
+        "@universal-rate-limit/express": "workspace:*",
+        "universal-rate-limit": "workspace:*"
     },
     "devDependencies": {
         "@types/express": "^5.0.0",
         "express": "^5.2.1",
-        "express-rate-limit": "^8.2.1"
+        "express-rate-limit": "^8.3.1"
     }
 }
