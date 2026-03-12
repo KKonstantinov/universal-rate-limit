@@ -22,34 +22,35 @@
         "changeset": "changeset",
         "version-packages": "changeset version && node scripts/sync-jsr-versions.js",
         "release": "pnpm build && changeset publish",
-        "release:jsr": "cd packages/core && npx jsr publish --allow-dirty && cd ../../packages/middleware/hono && npx jsr publish --allow-dirty",
+        "release:jsr": "pnpm -r --if-present run release:jsr",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
         "prepare": "lefthook install"
     },
     "devDependencies": {
-        "@changesets/changelog-github": "^0.5.2",
-        "@changesets/cli": "^2.29.8",
+        "@changesets/changelog-github": "^0.6.0",
+        "@changesets/cli": "^2.30.0",
         "@eslint/js": "^10.0.1",
-        "@types/node": "^22.0.0",
-        "@typescript/native-preview": "7.0.0-dev.20260228.1",
-        "eslint": "^10.0.2",
+        "@types/node": "^25.5.0",
+        "@typescript/native-preview": "7.0.0-dev.20260312.1",
+        "eslint": "^10.0.3",
         "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-import-x": "^4.16.1",
+        "eslint-plugin-import-x": "^4.16.2",
         "eslint-plugin-prettier": "^5.5.5",
         "eslint-plugin-unicorn": "^63.0.0",
         "jiti": "^2.6.1",
-        "lefthook": "^2.1.1",
+        "lefthook": "^2.1.4",
         "prettier": "^3.8.1",
-        "tsdown": "^0.20.3",
+        "tsdown": "^0.21.2",
         "typescript": "^5.9.3",
-        "typescript-eslint": "^8.56.1",
+        "typescript-eslint": "^8.57.0",
         "vitepress": "^1.6.4",
-        "vitest": "^3.0.0"
+        "vitest": "^4.1.0"
     },
     "pnpm": {
         "onlyBuiltDependencies": [
+            "esbuild",
             "lefthook"
         ]
     }

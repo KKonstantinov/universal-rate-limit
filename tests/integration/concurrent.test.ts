@@ -108,7 +108,7 @@ describe('Concurrent requests', () => {
     });
 
     it('burst then wait less than window then one more — still limited', async () => {
-        const limiter = rateLimit({ limit: 2, windowMs: 2000 });
+        const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
