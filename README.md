@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="universal-rate-limit.svg" alt="universal-rate-limit" width="600" />
+  <img src="universal-rate-limit.svg" alt="universal-rate-limit" />
 </p>
 
 <p align="center">
