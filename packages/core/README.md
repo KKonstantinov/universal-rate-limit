@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit.svg" alt="universal-rate-limit" width="600" />
+  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit.svg" alt="universal-rate-limit" />
 </p>
 
 <p align="center">
