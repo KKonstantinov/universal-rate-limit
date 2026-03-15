@@ -1,8 +1,29 @@
-# universal-rate-limit
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit.svg" alt="universal-rate-limit" width="600" />
+</p>
 
-Web-standards-based rate limiting with pluggable stores and framework middleware. Zero dependencies, works everywhere.
+<p align="center">
+  <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/v/universal-rate-limit.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/types/universal-rate-limit.svg" alt="types" /></a>
+  <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/universal-rate-limit.svg" alt="license" /></a>
+  <a href="https://bundlephobia.com/package/universal-rate-limit"><img src="https://img.shields.io/bundlephobia/minzip/universal-rate-limit" alt="bundle size" /></a>
+</p>
 
-Rate limit any HTTP endpoint using the Web Standards `Request`/`Response` API — with built-in support for Express, Fastify, Hono, and Next.js. Swap between fixed-window and sliding-window algorithms, bring your own store, and get IETF-compliant rate limit headers out of the box.
+<p align="center">
+  Web-standards-based rate limiting with pluggable stores and framework middleware.<br>
+  Zero dependencies. Works everywhere.
+</p>
+
+---
+
+## Why universal-rate-limit?
+
+Most rate limiters are tied to a single framework or runtime. `universal-rate-limit` is built on the Web Standards `Request`/`Response` API, so the same core works on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge — no rewrites, no adapters to learn from scratch.
+
+- **One library, every runtime** — write your rate limiting logic once, deploy it anywhere
+- **Drop-in framework middleware** — first-class adapters for Express, Fastify, Hono, and Next.js
+- **IETF-compliant headers** — draft-6 and draft-7 rate limit headers out of the box
+- **~3 KB min+gzip** — zero dependencies, tree-shakeable ESM
 
 ## Install
 
@@ -82,10 +103,22 @@ A ready-made Redis store is available via [`@universal-rate-limit/redis`](https:
 
 Drop-in adapters are available as separate packages:
 
-- [`@universal-rate-limit/express`](https://www.npmjs.com/package/@universal-rate-limit/express)
-- [`@universal-rate-limit/fastify`](https://www.npmjs.com/package/@universal-rate-limit/fastify)
-- [`@universal-rate-limit/hono`](https://www.npmjs.com/package/@universal-rate-limit/hono)
-- [`@universal-rate-limit/nextjs`](https://www.npmjs.com/package/@universal-rate-limit/nextjs)
+| Package                                                                                        | Framework          | Install                               |
+| ---------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------- |
+| [`@universal-rate-limit/express`](https://www.npmjs.com/package/@universal-rate-limit/express) | Express            | `npm i @universal-rate-limit/express` |
+| [`@universal-rate-limit/fastify`](https://www.npmjs.com/package/@universal-rate-limit/fastify) | Fastify            | `npm i @universal-rate-limit/fastify` |
+| [`@universal-rate-limit/hono`](https://www.npmjs.com/package/@universal-rate-limit/hono)       | Hono               | `npm i @universal-rate-limit/hono`    |
+| [`@universal-rate-limit/nextjs`](https://www.npmjs.com/package/@universal-rate-limit/nextjs)   | Next.js App Router | `npm i @universal-rate-limit/nextjs`  |
+
+## Runtime Compatibility
+
+| Runtime            | Version | Status     |
+| ------------------ | ------- | ---------- |
+| Node.js            | >= 20   | Tested     |
+| Bun                | >= 1.0  | Tested     |
+| Deno               | >= 2.0  | Tested     |
+| Cloudflare Workers | -       | Compatible |
+| Vercel Edge        | -       | Compatible |
 
 ## Documentation
 

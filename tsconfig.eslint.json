@@ -17,6 +17,7 @@
         "packages/benchmarks/src",
         "packages/benchmarks/*.config.ts",
         "tests/integration",
+        "docs/.vitepress/theme",
         "*.config.ts"
     ],
     "exclude": ["node_modules", "**/dist", "**/node_modules"]

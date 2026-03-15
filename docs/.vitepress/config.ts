@@ -6,6 +6,29 @@ export default defineConfig({
 
     base: '/universal-rate-limit/',
 
+    head: [
+        ['meta', { property: 'og:title', content: 'universal-rate-limit' }],
+        [
+            'meta',
+            {
+                property: 'og:description',
+                content:
+                    'Web-standards-based rate limiting with pluggable stores and framework middleware. Zero dependencies, works everywhere.'
+            }
+        ],
+        ['meta', { property: 'og:type', content: 'website' }],
+        ['meta', { name: 'twitter:card', content: 'summary' }],
+        ['meta', { name: 'twitter:title', content: 'universal-rate-limit' }],
+        [
+            'meta',
+            {
+                name: 'twitter:description',
+                content:
+                    'Web-standards-based rate limiting with pluggable stores and framework middleware. Zero dependencies, works everywhere.'
+            }
+        ]
+    ],
+
     themeConfig: {
         nav: [
             { text: 'Guide', link: '/getting-started' },
@@ -83,6 +106,16 @@ export default defineConfig({
                 icon: 'github',
                 link: 'https://github.com/KKonstantinov/universal-rate-limit'
             }
-        ]
+        ],
+
+        editLink: {
+            pattern: 'https://github.com/KKonstantinov/universal-rate-limit/edit/main/docs/:path',
+            text: 'Edit this page on GitHub'
+        },
+
+        footer: {
+            message: 'Released under the MIT License.',
+            copyright: 'Built with VitePress'
+        }
     }
 });

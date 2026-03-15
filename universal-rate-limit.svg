@@ -1,0 +1,15 @@
+<svg viewBox="0 0 800 250" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="#0d1117" rx="12"/>
+  <rect width="100%" height="100%" fill="none" stroke="#30363d" stroke-width="4" rx="12"/>
+  
+  <text x="50%" y="45%" font-family="monospace" font-size="46" fill="#58a6ff" text-anchor="middle" font-weight="bold">
+    universal-rate-limit
+  </text>
+  
+  <text x="50%" y="65%" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#8b949e" text-anchor="middle">
+    Web-standards-based rate limiting.
+  </text>
+  <text x="50%" y="78%" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#8b949e" text-anchor="middle">
+    Zero dependencies. Works everywhere.
+  </text>
+</svg>

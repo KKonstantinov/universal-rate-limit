@@ -16,17 +16,23 @@ hero:
           link: https://github.com/KKonstantinov/universal-rate-limit
 
 features:
-    - title: Web Standards
+    - icon: 🌐
+      title: Web Standards
       details: Built on Request/Response APIs — runs on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge.
-    - title: Pluggable Stores
+    - icon: 🔌
+      title: Pluggable Stores
       details: MemoryStore built-in, RedisStore for distributed deployments. Implement the Store interface for KV or any backend.
-    - title: Framework Middleware
+    - icon: ⚡
+      title: Framework Middleware
       details: Drop-in support for Express, Fastify, Hono, and Next.js with framework-native APIs.
-    - title: Sliding Window
+    - icon: 📊
+      title: Sliding Window
       details: Choose between fixed-window and sliding-window algorithms for smoother rate limiting.
-    - title: IETF Headers
+    - icon: 📋
+      title: IETF Headers
       details: Draft-6 and draft-7 rate limit headers with zero configuration, fully compliant.
-    - title: Fully Typed
+    - icon: 🛡️
+      title: Fully Typed
       details: Written in TypeScript with complete type definitions. Zero runtime dependencies.
 ---
 
@@ -88,14 +94,14 @@ const limiter = rateLimit({
 
 ## Packages
 
-| Package                                                                                        | Description                |
-| ---------------------------------------------------------------------------------------------- | -------------------------- |
-| [`universal-rate-limit`](https://www.npmjs.com/package/universal-rate-limit)                   | Core rate limiting library |
-| [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis)     | Redis store                |
-| [`@universal-rate-limit/express`](https://www.npmjs.com/package/@universal-rate-limit/express) | Express middleware         |
-| [`@universal-rate-limit/fastify`](https://www.npmjs.com/package/@universal-rate-limit/fastify) | Fastify plugin             |
-| [`@universal-rate-limit/hono`](https://www.npmjs.com/package/@universal-rate-limit/hono)       | Hono middleware            |
-| [`@universal-rate-limit/nextjs`](https://www.npmjs.com/package/@universal-rate-limit/nextjs)   | Next.js App Router wrapper |
+| Package                                              | Description                |
+| ---------------------------------------------------- | -------------------------- |
+| [`universal-rate-limit`](/packages/core)             | Core rate limiting library |
+| [`@universal-rate-limit/redis`](/packages/redis)     | Redis store                |
+| [`@universal-rate-limit/express`](/packages/express) | Express middleware         |
+| [`@universal-rate-limit/fastify`](/packages/fastify) | Fastify plugin             |
+| [`@universal-rate-limit/hono`](/packages/hono)       | Hono middleware            |
+| [`@universal-rate-limit/nextjs`](/packages/nextjs)   | Next.js App Router wrapper |
 
 ## Acknowledgements
 
