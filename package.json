@@ -11,6 +11,7 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:integration": "vitest run --project tests/integration",
+        "test:examples": "pnpm --filter '@universal-rate-limit/example-*' --sequential run test:integration",
         "test:bun": "bun test tests/bun/",
         "test:deno": "deno test --allow-net tests/deno/",
         "test:all": "pnpm test && pnpm test:bun && pnpm test:deno",

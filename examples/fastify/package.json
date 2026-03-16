@@ -1,0 +1,15 @@
+{
+    "name": "@universal-rate-limit/example-fastify",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "tsx src/index.ts",
+        "test:integration": "vitest run test/integration"
+    },
+    "dependencies": {
+        "@universal-rate-limit/fastify": "workspace:*",
+        "universal-rate-limit": "workspace:*",
+        "fastify": "^5.8.2"
+    }
+}

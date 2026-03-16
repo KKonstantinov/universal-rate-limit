@@ -41,6 +41,10 @@ app.listen(3000);
 
 Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `windowMs`, `limit`, `algorithm`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, and `passOnStoreError`.
 
+## Example
+
+See [`examples/express`](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/express) for a complete working app with integration tests.
+
 ## Documentation
 
 **[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**

@@ -99,6 +99,15 @@ const limiter = rateLimit({ store: new MyStore() });
 
 A ready-made Redis store is available via [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis).
 
+## Examples
+
+Example apps with integration tests are available for each framework:
+
+- [Express](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/express)
+- [Fastify](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/fastify)
+- [Hono](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/hono)
+- [Next.js](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/nextjs)
+
 ## Framework Middleware
 
 Drop-in adapters are available as separate packages:

@@ -41,6 +41,10 @@ export default app;
 
 Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `windowMs`, `limit`, `algorithm`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, and `passOnStoreError`.
 
+## Example
+
+See [`examples/hono`](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/hono) for a complete working app with integration tests.
+
 ## Documentation
 
 **[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**

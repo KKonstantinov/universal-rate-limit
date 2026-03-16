@@ -15,7 +15,9 @@ export default tseslint.config(
             'scripts/',
             'docs/.vitepress/cache/',
             'docs/.vitepress/dist/',
-            'docs/.vitepress/config.ts'
+            'docs/.vitepress/config.ts',
+            'examples/nextjs/.next/',
+            'examples/nextjs/next-env.d.ts'
         ]
     },
     eslint.configs.recommended,
@@ -52,6 +54,8 @@ export default tseslint.config(
             'packages/core/test/**/*.ts',
             'packages/redis/test/**/*.ts',
             'packages/middleware/*/test/**/*.ts',
+            'examples/*/test/**/*.ts',
+            'examples/shared/**/*.ts',
             'tests/integration/**/*.ts'
         ],
         rules: {

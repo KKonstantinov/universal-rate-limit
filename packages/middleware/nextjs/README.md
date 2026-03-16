@@ -65,6 +65,10 @@ export async function middleware(request: Request) {
 
 Both `withRateLimit` and `nextjsRateLimit` accept all [core options](https://www.npmjs.com/package/universal-rate-limit) — `windowMs`, `limit`, `algorithm`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, and `passOnStoreError`.
 
+## Example
+
+See [`examples/nextjs`](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/nextjs) for a complete Next.js App Router app with integration tests.
+
 ## Documentation
 
 **[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**

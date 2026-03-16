@@ -15,7 +15,7 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
             - run: pnpm build
@@ -41,6 +41,20 @@ jobs:
             - run: pnpm build
             - run: pnpm test
 
+    test-examples:
+        name: Test Examples
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+            - run: pnpm test:examples
+
     test-bun:
         name: Test (Bun)
         runs-on: ubuntu-latest
@@ -49,7 +63,7 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: pnpm
             - uses: oven-sh/setup-bun@v2
             - run: pnpm install --frozen-lockfile
@@ -64,7 +78,7 @@ jobs:
             - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: pnpm
             - uses: denoland/setup-deno@v2
               with:

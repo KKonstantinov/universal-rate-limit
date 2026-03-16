@@ -16,6 +16,9 @@
         "packages/middleware/*/*.config.ts",
         "packages/benchmarks/src",
         "packages/benchmarks/*.config.ts",
+        "examples/*/src",
+        "examples/*/test",
+        "examples/*/*.config.ts",
         "tests/integration",
         "docs/.vitepress/theme",
         "*.config.ts"

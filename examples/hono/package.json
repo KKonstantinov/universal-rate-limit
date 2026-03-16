@@ -1,0 +1,16 @@
+{
+    "name": "@universal-rate-limit/example-hono",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "tsx src/index.ts",
+        "test:integration": "vitest run test/integration"
+    },
+    "dependencies": {
+        "@hono/node-server": "^1.19.11",
+        "@universal-rate-limit/hono": "workspace:*",
+        "universal-rate-limit": "workspace:*",
+        "hono": "^4.12.8"
+    }
+}

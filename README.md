@@ -164,6 +164,17 @@ class RedisStore implements Store {
 const limiter = rateLimit({ store: new RedisStore() });
 ```
 
+## Examples
+
+Example apps with integration tests for each framework:
+
+| Example                                | Framework | Description                          |
+| -------------------------------------- | --------- | ------------------------------------ |
+| [`examples/express`](examples/express) | Express   | Rate-limited Express API server      |
+| [`examples/fastify`](examples/fastify) | Fastify   | Rate-limited Fastify API server      |
+| [`examples/hono`](examples/hono)       | Hono      | Rate-limited Hono API server         |
+| [`examples/nextjs`](examples/nextjs)   | Next.js   | Rate-limited Next.js App Router APIs |
+
 ## Packages
 
 This is a monorepo managed with [pnpm workspaces](https://pnpm.io/workspaces):
