@@ -4,3 +4,4 @@
 # Lock files
 pnpm-lock.yaml
 .npmrc
+next-env.d.ts
