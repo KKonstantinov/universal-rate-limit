@@ -1,5 +1,10 @@
 # @universal-rate-limit/express
 
+[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/express.svg)](https://www.npmjs.com/package/@universal-rate-limit/express)
+[![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/express.svg)](https://www.npmjs.com/package/@universal-rate-limit/express)
+[![types](https://img.shields.io/npm/types/@universal-rate-limit/express.svg)](https://www.npmjs.com/package/@universal-rate-limit/express)
+[![license](https://img.shields.io/npm/l/@universal-rate-limit/express.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+
 Express middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your own), and IETF-compliant rate
 limit headers out of the box.
 

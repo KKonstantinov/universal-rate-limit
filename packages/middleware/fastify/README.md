@@ -1,5 +1,10 @@
 # @universal-rate-limit/fastify
 
+[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/fastify.svg)](https://www.npmjs.com/package/@universal-rate-limit/fastify)
+[![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/fastify.svg)](https://www.npmjs.com/package/@universal-rate-limit/fastify)
+[![types](https://img.shields.io/npm/types/@universal-rate-limit/fastify.svg)](https://www.npmjs.com/package/@universal-rate-limit/fastify)
+[![license](https://img.shields.io/npm/l/@universal-rate-limit/fastify.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+
 Fastify plugin for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your own), and IETF-compliant rate limit
 headers out of the box.
 

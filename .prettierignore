@@ -1,3 +1,6 @@
+# Symlinked/included docs (VitePress @include directives)
+docs/packages/
+
 # Build output
 **/dist/
 

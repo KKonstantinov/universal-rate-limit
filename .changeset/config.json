@@ -7,5 +7,11 @@
     "access": "public",
     "baseBranch": "main",
     "updateInternalDependencies": "patch",
-    "ignore": []
+    "ignore": [
+        "@universal-rate-limit/benchmarks",
+        "@universal-rate-limit/example-express",
+        "@universal-rate-limit/example-fastify",
+        "@universal-rate-limit/example-hono",
+        "@universal-rate-limit/example-nextjs"
+    ]
 }

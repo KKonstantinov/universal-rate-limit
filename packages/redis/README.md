@@ -1,5 +1,9 @@
 # @universal-rate-limit/redis
 
+[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis) [![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis)
+[![types](https://img.shields.io/npm/types/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis)
+[![license](https://img.shields.io/npm/l/@universal-rate-limit/redis.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+
 Redis store for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit). Uses atomic Lua scripts to prevent race conditions — works with any Redis client library.
 
 `universal-rate-limit` is a web-standards-based rate limiter with fixed-window and sliding-window algorithms, IETF-compliant headers, and drop-in middleware for Express, Fastify, Hono, and Next.js. This package lets you back it with Redis for multi-instance deployments.

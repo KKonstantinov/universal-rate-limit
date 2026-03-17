@@ -1,5 +1,8 @@
 # @universal-rate-limit/hono
 
+[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/hono.svg)](https://www.npmjs.com/package/@universal-rate-limit/hono) [![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/hono.svg)](https://www.npmjs.com/package/@universal-rate-limit/hono)
+[![types](https://img.shields.io/npm/types/@universal-rate-limit/hono.svg)](https://www.npmjs.com/package/@universal-rate-limit/hono) [![license](https://img.shields.io/npm/l/@universal-rate-limit/hono.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+
 Hono middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your own), and IETF-compliant rate
 limit headers out of the box. Works on Node.js, Bun, Deno, Cloudflare Workers, and other edge runtimes.
 

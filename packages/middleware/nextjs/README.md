@@ -1,5 +1,9 @@
 # @universal-rate-limit/nextjs
 
+[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/nextjs.svg)](https://www.npmjs.com/package/@universal-rate-limit/nextjs)
+[![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/nextjs.svg)](https://www.npmjs.com/package/@universal-rate-limit/nextjs) [![types](https://img.shields.io/npm/types/@universal-rate-limit/nextjs.svg)](https://www.npmjs.com/package/@universal-rate-limit/nextjs)
+[![license](https://img.shields.io/npm/l/@universal-rate-limit/nextjs.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+
 Next.js App Router wrapper and Edge middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your
 own), and IETF-compliant rate limit headers out of the box.
 
