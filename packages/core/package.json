@@ -1,6 +1,6 @@
 {
     "name": "universal-rate-limit",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Web-standards-based rate limiting library with pluggable stores and framework middleware adapters",
     "type": "module",
     "sideEffects": false,
