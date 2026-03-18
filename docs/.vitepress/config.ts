@@ -34,6 +34,17 @@ export default defineConfig({
             { text: 'Guide', link: '/getting-started' },
             { text: 'API', link: '/api' },
             {
+                text: 'Packages',
+                items: [
+                    { text: 'universal-rate-limit', link: '/packages/core' },
+                    { text: '@universal-rate-limit/redis', link: '/packages/redis' },
+                    { text: '@universal-rate-limit/express', link: '/packages/express' },
+                    { text: '@universal-rate-limit/fastify', link: '/packages/fastify' },
+                    { text: '@universal-rate-limit/hono', link: '/packages/hono' },
+                    { text: '@universal-rate-limit/nextjs', link: '/packages/nextjs' }
+                ]
+            },
+            {
                 text: 'npm',
                 link: 'https://www.npmjs.com/package/universal-rate-limit'
             },

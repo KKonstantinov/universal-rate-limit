@@ -12,7 +12,7 @@ hero:
           text: API Reference
           link: /api
         - theme: alt
-          text: GitHub
+          text: GitHub ↗
           link: https://github.com/KKonstantinov/universal-rate-limit
 
 features:
@@ -30,7 +30,7 @@ features:
       details: Choose between fixed-window and sliding-window algorithms for smoother rate limiting.
     - icon: 📋
       title: IETF Headers
-      details: Draft-6 and draft-7 rate limit headers with zero configuration, fully compliant.
+      details: Draft-6 and draft-7 rate limit headers plus Retry-After (RFC 9110) with zero configuration.
     - icon: 🛡️
       title: Fully Typed
       details: Written in TypeScript with complete type definitions. Zero runtime dependencies.

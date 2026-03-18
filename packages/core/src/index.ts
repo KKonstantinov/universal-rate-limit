@@ -117,7 +117,14 @@ export interface RateLimitResult {
     remaining: number;
     /** The time at which the current rate limit window resets. */
     resetTime: Date;
-    /** Pre-formatted RateLimit headers to attach to the response. */
+    /**
+     * Pre-formatted RateLimit headers to attach to the response.
+     *
+     * Always includes the IETF RateLimit headers for the configured draft version.
+     * When {@link limited} is `true`, a
+     * {@link https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3 | Retry-After}
+     * header (RFC 9110 §10.2.3) is also included using the delay-seconds format.
+     */
     headers: Record<string, string>;
 }
 
@@ -152,6 +159,9 @@ function defaultKeyGenerator(request: Request): string {
  * @param nowMs - Current Unix-ms timestamp (avoids redundant Date.now() calls).
  * @param windowSeconds - Window duration in seconds (pre-computed by the factory).
  * @param legacyHeaders - Whether to include X-RateLimit-* headers.
+ * @param limited - Whether the request was rate-limited. When `true`, a
+ *   {@link https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3 | RFC 9110 §10.2.3}
+ *   `Retry-After` header is included using the delay-seconds format.
  * @param policyHeader - Pre-computed RateLimit-Policy value (static-limit optimisation).
  * @returns A plain object of header name/value pairs.
  */
@@ -163,6 +173,7 @@ function generateHeaders(
     nowMs: number,
     windowSeconds: number,
     legacyHeaders: boolean,
+    limited: boolean,
     policyHeader?: string
 ): Record<string, string> {
     const resetSeconds = Math.max(0, Math.ceil((resetTimeMs - nowMs) / 1000));
@@ -179,6 +190,11 @@ function generateHeaders(
                   RateLimit: 'limit=' + String(limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
                   'RateLimit-Policy': policyHeader ?? String(limit) + ';w=' + String(windowSeconds)
               };
+
+    // RFC 9110 §10.2.3 — Retry-After (delay-seconds)
+    if (limited) {
+        headers['Retry-After'] = String(resetSeconds);
+    }
 
     if (legacyHeaders) {
         headers['X-RateLimit-Limit'] = String(limit);
@@ -367,7 +383,17 @@ export function rateLimit<TRequest = Request>(
             limit,
             remaining: limit,
             resetTime: new Date(resetTimeMs),
-            headers: generateHeaders(headersVersion, limit, limit, resetTimeMs, now, windowSeconds, legacyHeaders, staticPolicyHeader)
+            headers: generateHeaders(
+                headersVersion,
+                limit,
+                limit,
+                resetTimeMs,
+                now,
+                windowSeconds,
+                legacyHeaders,
+                false,
+                staticPolicyHeader
+            )
         };
     }
 
@@ -378,7 +404,17 @@ export function rateLimit<TRequest = Request>(
             limit,
             remaining: limit,
             resetTime: new Date(resetTimeMs),
-            headers: generateHeaders(headersVersion, limit, limit, resetTimeMs, now, windowSeconds, legacyHeaders, staticPolicyHeader)
+            headers: generateHeaders(
+                headersVersion,
+                limit,
+                limit,
+                resetTimeMs,
+                now,
+                windowSeconds,
+                legacyHeaders,
+                false,
+                staticPolicyHeader
+            )
         };
     }
 
@@ -394,6 +430,7 @@ export function rateLimit<TRequest = Request>(
             now,
             windowSeconds,
             legacyHeaders,
+            limited,
             staticPolicyHeader
         );
         return { limited, limit, remaining: Math.max(0, remaining), resetTime: incrementResult.resetTime, headers };

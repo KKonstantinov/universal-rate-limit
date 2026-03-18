@@ -126,11 +126,11 @@ const limiter = rateLimit({
 
 ## Custom Response
 
-Customize the 429 response:
+Customize the 429 response body. A `Retry-After` header is included automatically on all 429 responses.
 
 ```ts
 const limiter = rateLimit({
-    message: { error: 'Rate limit exceeded', retryAfter: '60s' },
+    message: { error: 'Rate limit exceeded' },
     statusCode: 429
 });
 ```

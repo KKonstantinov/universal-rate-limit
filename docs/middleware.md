@@ -163,7 +163,17 @@ RateLimit-Remaining: 59
 RateLimit-Reset: 58
 ```
 
-Switch between versions with the `headers` option:
+### Retry-After
+
+When a request is rate-limited (429), a [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) header is automatically included using the delay-seconds format:
+
+```
+Retry-After: 58
+```
+
+This is a standard HTTP header (RFC 9110 §10.2.3) that tells clients how many seconds to wait before retrying. It is included regardless of which draft version is configured.
+
+Switch between header versions with the `headers` option:
 
 ```ts
 expressRateLimit({

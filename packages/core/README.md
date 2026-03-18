@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit.svg" alt="universal-rate-limit" />
+  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit-header.png" alt="universal-rate-limit" />
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@ Most rate limiters are tied to a single framework or runtime. `universal-rate-li
 
 - **One library, every runtime** — write your rate limiting logic once, deploy it anywhere
 - **Drop-in framework middleware** — first-class adapters for Express, Fastify, Hono, and Next.js
-- **IETF-compliant headers** — draft-6 and draft-7 rate limit headers out of the box
+- **IETF-compliant headers** — draft-6 and draft-7 rate limit headers plus [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) out of the box
 - **~3 KB min+gzip** — zero dependencies, tree-shakeable ESM
 
 ## Install

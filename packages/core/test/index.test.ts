@@ -322,6 +322,38 @@ describe('rateLimit', () => {
 
             expect(result.headers).not.toHaveProperty('X-RateLimit-Limit');
         });
+
+        it('includes Retry-After header when rate-limited', async () => {
+            const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+            const req = createRequest();
+
+            await limiter(req);
+            const limited = await limiter(req);
+
+            expect(limited.limited).toBe(true);
+            expect(limited.headers).toHaveProperty('Retry-After');
+            expect(limited.headers['Retry-After']).toMatch(/^\d+$/);
+        });
+
+        it('does not include Retry-After header when not rate-limited', async () => {
+            const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+            const result = await limiter(createRequest());
+
+            expect(result.limited).toBe(false);
+            expect(result.headers).not.toHaveProperty('Retry-After');
+        });
+
+        it('includes Retry-After header with draft-6 headers', async () => {
+            const limiter = rateLimit({ limit: 1, windowMs: 60_000, headers: 'draft-6' });
+            const req = createRequest();
+
+            await limiter(req);
+            const limited = await limiter(req);
+
+            expect(limited.limited).toBe(true);
+            expect(limited.headers).toHaveProperty('Retry-After');
+            expect(limited.headers).toHaveProperty('RateLimit-Reset');
+        });
     });
 
     describe('default key generator', () => {

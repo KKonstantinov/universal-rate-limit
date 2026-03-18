@@ -45,13 +45,13 @@ interface RateLimitResult {
 }
 ```
 
-| Field       | Type                     | Description                                    |
-| ----------- | ------------------------ | ---------------------------------------------- |
-| `limited`   | `boolean`                | Whether the request is rate limited            |
-| `limit`     | `number`                 | Maximum requests allowed in the window         |
-| `remaining` | `number`                 | Requests remaining in the current window       |
-| `resetTime` | `Date`                   | When the current window resets                 |
-| `headers`   | `Record<string, string>` | IETF rate limit headers to set on the response |
+| Field       | Type                     | Description                                                                                                                                               |
+| ----------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `limited`   | `boolean`                | Whether the request is rate limited                                                                                                                       |
+| `limit`     | `number`                 | Maximum requests allowed in the window                                                                                                                    |
+| `remaining` | `number`                 | Requests remaining in the current window                                                                                                                  |
+| `resetTime` | `Date`                   | When the current window resets                                                                                                                            |
+| `headers`   | `Record<string, string>` | IETF rate limit headers to set on the response. Includes [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) when `limited` is `true`. |
 
 ---
 

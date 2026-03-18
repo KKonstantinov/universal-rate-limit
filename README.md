@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="universal-rate-limit.svg" alt="universal-rate-limit" />
+  <img src="universal-rate-limit-header.png" alt="universal-rate-limit" />
 </p>
 
 <p align="center">
@@ -18,48 +18,13 @@
 
 Rate limit any HTTP endpoint using the Web Standards `Request`/`Response` API — with built-in support for Express, Fastify, Hono, and Next.js. Swap between fixed-window and sliding-window algorithms, bring your own store, and get IETF-compliant rate limit headers out of the box.
 
-<div align="center">
-
-```mermaid
-graph TB
-    Client((🌐 Incoming<br>Requests)) --> Limiter
-
-    subgraph Core["⚡ universal-rate-limit"]
-        Limiter{Rate Limiter}
-        Limiter --> FW[Fixed Window]
-        Limiter --> SW[Sliding Window]
-    end
-
-    subgraph Middleware["🔌 Framework Middleware"]
-        Express[Express]
-        Fastify[Fastify]
-        Hono[Hono]
-        NextJS[Next.js]
-    end
-
-    subgraph Stores["💾 Storage Adapters"]
-        Mem[(MemoryStore)]
-        Redis[(RedisStore)]
-    end
-
-    Core --> Middleware
-    Core -.-> Stores
-    Middleware --> Response[/✅ 200 · ⛔ 429<br>IETF Rate Limit Headers/]
-
-    style Core fill:#1a2332,stroke:#58a6ff,stroke-width:2px,color:#fff
-    style Limiter fill:#58a6ff,stroke:#0366d6,stroke-width:2px,color:#fff
-    style Response fill:#238636,stroke:#2ea043,color:#fff
-```
-
-</div>
-
 ## Features
 
 - **Web Standards** — built on `Request`/`Response`, runs on Node.js, Bun, Deno, and edge runtimes
 - **Pluggable Stores** — MemoryStore included, implement the `Store` interface for Redis, KV, or any backend
 - **Framework Middleware** — drop-in support for Express, Fastify, Hono, and Next.js
 - **Sliding Window** — choose between fixed-window and sliding-window algorithms
-- **IETF Headers** — draft-6 and draft-7 rate limit headers with zero configuration
+- **IETF Headers** — draft-6 and draft-7 rate limit headers plus [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) with zero configuration
 - **Fully Typed** — written in TypeScript with complete type definitions
 - **Zero Dependencies** — the core package has no runtime dependencies
 - **ESM Only** — modern, tree-shakeable
