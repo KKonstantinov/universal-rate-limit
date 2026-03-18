@@ -42,6 +42,18 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Wait until we're safely away from a clock-aligned window boundary.
+ * MemoryStore aligns windows to `Math.floor(now / windowMs) * windowMs`,
+ * so back-to-back requests near a boundary can land in different windows.
+ */
+async function waitForSafeWindowPosition(windowMs: number): Promise<void> {
+    const position = Date.now() % windowMs;
+    if (position > windowMs - 50) {
+        await sleep(windowMs - position + 10);
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('Window expiration (real timers)', () => {
@@ -55,7 +67,8 @@ describe('Window expiration (real timers)', () => {
     });
 
     it('window resets after expiry', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 500 });
+        const windowMs = 500;
+        const limiter = rateLimit({ limit: 1, windowMs });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -73,6 +86,9 @@ describe('Window expiration (real timers)', () => {
 
         const url = `http://localhost:${started.port}/`;
         const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Ensure both requests land in the same clock-aligned window
+        await waitForSafeWindowPosition(windowMs);
 
         const r1 = await fetch(url, ip);
         expect(r1.status).toBe(200);
