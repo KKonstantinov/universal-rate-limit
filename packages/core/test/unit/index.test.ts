@@ -389,7 +389,7 @@ describe('MemoryStore', () => {
     let store: MemoryStore;
 
     beforeEach(() => {
-        store = new MemoryStore(60_000, 'fixed-window');
+        store = new MemoryStore(60_000);
     });
 
     afterEach(() => {
@@ -398,10 +398,10 @@ describe('MemoryStore', () => {
 
     it('increments and returns hit count', () => {
         const r1 = store.increment('key1');
-        expect(r1.totalHits).toBe(1);
+        expect(r1.currentHits).toBe(1);
 
         const r2 = store.increment('key1');
-        expect(r2.totalHits).toBe(2);
+        expect(r2.currentHits).toBe(2);
     });
 
     it('decrements hit count', () => {
@@ -411,7 +411,7 @@ describe('MemoryStore', () => {
 
         // start=0, inc->1, inc->2, dec->1, inc->2
         const result = store.increment('key1');
-        expect(result.totalHits).toBe(2);
+        expect(result.currentHits).toBe(2);
     });
 
     it('resets a specific key', () => {
@@ -420,7 +420,7 @@ describe('MemoryStore', () => {
         store.resetKey('key1');
 
         const result = store.increment('key1');
-        expect(result.totalHits).toBe(1);
+        expect(result.currentHits).toBe(1);
     });
 
     it('resets all keys', () => {
@@ -430,8 +430,8 @@ describe('MemoryStore', () => {
 
         const r1 = store.increment('key1');
         const r2 = store.increment('key2');
-        expect(r1.totalHits).toBe(1);
-        expect(r2.totalHits).toBe(1);
+        expect(r1.currentHits).toBe(1);
+        expect(r2.currentHits).toBe(1);
     });
 
     it('returns a reset time in the future', () => {

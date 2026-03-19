@@ -47,7 +47,7 @@ async function bench(name: string, fn: (i: number) => unknown, ops: number): Pro
 
 async function benchUniversalStore(): Promise<BenchResult> {
     const keys = generateKeys(KEY_POOL_SIZE);
-    const store = new UniversalMemoryStore(WINDOW_MS, 'fixed-window');
+    const store = new UniversalMemoryStore(WINDOW_MS);
     const result = await bench('universal-rate-limit MemoryStore', i => store.increment(keys[i % KEY_POOL_SIZE]), OPERATIONS);
     store.shutdown();
     return result;
@@ -64,7 +64,7 @@ async function benchExpressStore(): Promise<BenchResult> {
 
 async function benchUniversalStoreSlidingWindow(): Promise<BenchResult> {
     const keys = generateKeys(KEY_POOL_SIZE);
-    const store = new UniversalMemoryStore(WINDOW_MS, 'sliding-window');
+    const store = new UniversalMemoryStore(WINDOW_MS);
     const result = await bench('universal MemoryStore (sliding window)', i => store.increment(keys[i % KEY_POOL_SIZE]), OPERATIONS);
     store.shutdown();
     return result;

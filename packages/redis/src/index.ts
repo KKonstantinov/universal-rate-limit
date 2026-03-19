@@ -41,14 +41,18 @@ export interface RedisStoreOptions {
 
 /**
  * Parse the two-element `[totalHits, timeToExpire]` array returned by the
- * Redis Lua scripts into a typed result object.
+ * Redis Lua scripts into a typed {@link IncrementResult}.
+ *
+ * Redis stores use a single counter per key, so `currentHits` is the total
+ * and `previousHits` is always `0`. The algorithm strategy in the core
+ * library handles any windowing logic on top of these raw values.
  */
-function parseScriptResult(reply: RedisReply, windowMs: number): { totalHits: number; resetTime: Date } {
+function parseScriptResult(reply: RedisReply, windowMs: number): IncrementResult {
     const arr = reply as [number, number];
-    const totalHits = arr[0];
+    const currentHits = arr[0];
     const timeToExpire = arr[1];
     const resetTime = new Date(Date.now() + (timeToExpire > 0 ? timeToExpire : windowMs));
-    return { totalHits, resetTime };
+    return { currentHits, previousHits: 0, resetTime };
 }
 
 // ── RedisStore ──────────────────────────────────────────────────────────────

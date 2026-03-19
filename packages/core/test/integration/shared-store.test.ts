@@ -15,7 +15,7 @@ describe('Shared store between limiters', () => {
     });
 
     it('two limiters sharing a store count against the same key', async () => {
-        store = new MemoryStore(60_000, 'fixed-window');
+        store = new MemoryStore(60_000);
 
         const limiterA = rateLimit({ limit: 3, windowMs: 60_000, store });
         const limiterB = rateLimit({ limit: 3, windowMs: 60_000, store });
@@ -37,7 +37,7 @@ describe('Shared store between limiters', () => {
     });
 
     it('resetKey affects all limiters using that store', async () => {
-        store = new MemoryStore(60_000, 'fixed-window');
+        store = new MemoryStore(60_000);
 
         const limiterA = rateLimit({ limit: 1, windowMs: 60_000, store });
         const limiterB = rateLimit({ limit: 1, windowMs: 60_000, store });
@@ -58,7 +58,7 @@ describe('Shared store between limiters', () => {
     });
 
     it('resetAll clears everything across both limiters', async () => {
-        store = new MemoryStore(60_000, 'fixed-window');
+        store = new MemoryStore(60_000);
 
         const limiterA = rateLimit({ limit: 1, windowMs: 60_000, store });
         const limiterB = rateLimit({ limit: 1, windowMs: 60_000, store });

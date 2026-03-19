@@ -155,15 +155,15 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
         }
 
         // INCR
-        const totalHits = Number(entry.value) + 1;
-        entry.value = String(totalHits);
+        const currentHits = Number(entry.value) + 1;
+        entry.value = String(currentHits);
 
         if (resetExpiry) {
             entry.expiresAt = Date.now() + windowMs;
-            return [totalHits, windowMs];
+            return [currentHits, windowMs];
         }
 
-        return [totalHits, ttl];
+        return [currentHits, ttl];
     }
 
     function executeGetScript(key: string): RedisReply {
@@ -191,24 +191,24 @@ describe('RedisStore', () => {
         });
     });
 
-    it('increment first call returns totalHits=1 and resetTime near now + windowMs', async () => {
+    it('increment first call returns currentHits=1 and resetTime near now + windowMs', async () => {
         const before = Date.now();
         const result = await redisStore.increment('test-key');
         const after = Date.now();
 
-        expect(result.totalHits).toBe(1);
+        expect(result.currentHits).toBe(1);
         expect(result.resetTime.getTime()).toBeGreaterThanOrEqual(before + 60_000);
         expect(result.resetTime.getTime()).toBeLessThanOrEqual(after + 60_000);
     });
 
-    it('increment subsequent calls increase totalHits', async () => {
+    it('increment subsequent calls increase currentHits', async () => {
         const r1 = await redisStore.increment('test-key');
         const r2 = await redisStore.increment('test-key');
         const r3 = await redisStore.increment('test-key');
 
-        expect(r1.totalHits).toBe(1);
-        expect(r2.totalHits).toBe(2);
-        expect(r3.totalHits).toBe(3);
+        expect(r1.currentHits).toBe(1);
+        expect(r2.currentHits).toBe(2);
+        expect(r3.currentHits).toBe(3);
     });
 
     it('increment after window expires resets to 1', async () => {
@@ -220,16 +220,16 @@ describe('RedisStore', () => {
             });
 
             const r1 = await shortStore.increment('test-key');
-            expect(r1.totalHits).toBe(1);
+            expect(r1.currentHits).toBe(1);
 
             const r2 = await shortStore.increment('test-key');
-            expect(r2.totalHits).toBe(2);
+            expect(r2.currentHits).toBe(2);
 
             // Advance past the window
             vi.advanceTimersByTime(1500);
 
             const r3 = await shortStore.increment('test-key');
-            expect(r3.totalHits).toBe(1);
+            expect(r3.currentHits).toBe(1);
         } finally {
             vi.useRealTimers();
         }
@@ -255,7 +255,7 @@ describe('RedisStore', () => {
         await redisStore.resetKey('test-key');
 
         const result = await redisStore.increment('test-key');
-        expect(result.totalHits).toBe(1);
+        expect(result.currentHits).toBe(1);
     });
 
     it('resetAll clears all prefixed keys', async () => {
@@ -298,7 +298,7 @@ describe('RedisStore', () => {
             vi.advanceTimersByTime(8000);
 
             const r2 = await resetStore.increment('test-key');
-            expect(r2.totalHits).toBe(2);
+            expect(r2.currentHits).toBe(2);
             // TTL should have been reset to full windowMs
             expect(r2.resetTime.getTime()).toBeGreaterThanOrEqual(Date.now() + 9000);
 
@@ -306,7 +306,7 @@ describe('RedisStore', () => {
             vi.advanceTimersByTime(8000);
 
             const r3 = await resetStore.increment('test-key');
-            expect(r3.totalHits).toBe(3); // Not reset because expiry was refreshed
+            expect(r3.currentHits).toBe(3); // Not reset because expiry was refreshed
         } finally {
             vi.useRealTimers();
         }
@@ -322,7 +322,7 @@ describe('RedisStore', () => {
         // The next EVALSHA should fail with NOSCRIPT, trigger a reload, and succeed
         const result = await redisStore.increment('test-key');
         // Key data still exists — count continues from where it was
-        expect(result.totalHits).toBe(2);
+        expect(result.currentHits).toBe(2);
     });
 
     it('propagates non-NOSCRIPT errors', async () => {

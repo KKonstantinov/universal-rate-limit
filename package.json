@@ -22,6 +22,8 @@
         "version-packages": "changeset version && node scripts/sync-jsr-versions.js",
         "release": "pnpm build && changeset publish",
         "release:jsr": "pnpm -r --if-present run release:jsr",
+        "playground:dev": "pnpm --filter @universal-rate-limit/playground dev",
+        "playground:build": "pnpm --filter @universal-rate-limit/playground build",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",

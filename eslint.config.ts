@@ -17,7 +17,10 @@ export default tseslint.config(
             'docs/.vitepress/dist/',
             'docs/.vitepress/config.ts',
             'examples/nextjs/.next/',
-            'examples/nextjs/next-env.d.ts'
+            'examples/nextjs/next-env.d.ts',
+            'packages/playground/.next/',
+            'packages/playground/next-env.d.ts',
+            'packages/playground/postcss.config.mjs'
         ]
     },
     eslint.configs.recommended,

@@ -173,7 +173,7 @@ describe('Window expiration (real timers)', () => {
     });
 
     it('MemoryStore cleanup runs on schedule', async () => {
-        const store = new MemoryStore(500, 'fixed-window');
+        const store = new MemoryStore(500);
         try {
             const limiter = rateLimit({ limit: 1, windowMs: 500, store });
 

@@ -63,28 +63,28 @@ describe('rateLimit core (Bun)', () => {
 
 describe('MemoryStore (Bun)', () => {
     it('increment, decrement, resetKey, resetAll', async () => {
-        const store = new MemoryStore(60_000, 'fixed-window');
+        const store = new MemoryStore(60_000);
         try {
             const r1 = await store.increment('k1');
-            expect(r1.totalHits).toBe(1);
+            expect(r1.currentHits).toBe(1);
 
             const r2 = await store.increment('k1');
-            expect(r2.totalHits).toBe(2);
+            expect(r2.currentHits).toBe(2);
 
             await store.decrement('k1');
             const r3 = await store.increment('k1');
-            expect(r3.totalHits).toBe(2);
+            expect(r3.currentHits).toBe(2);
 
             await store.resetKey('k1');
             const r4 = await store.increment('k1');
-            expect(r4.totalHits).toBe(1);
+            expect(r4.currentHits).toBe(1);
 
             await store.increment('k2');
             await store.resetAll();
             const r5 = await store.increment('k1');
             const r6 = await store.increment('k2');
-            expect(r5.totalHits).toBe(1);
-            expect(r6.totalHits).toBe(1);
+            expect(r5.currentHits).toBe(1);
+            expect(r6.currentHits).toBe(1);
         } finally {
             store.shutdown();
         }

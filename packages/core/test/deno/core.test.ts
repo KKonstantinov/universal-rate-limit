@@ -8,7 +8,7 @@ function createRequest(ip = '1.2.3.4', path = '/'): Request {
 }
 
 Deno.test('rateLimit allows requests under the limit and blocks over it', async () => {
-    const store = new MemoryStore(60_000, 'fixed-window');
+    const store = new MemoryStore(60_000);
     try {
         const limiter = rateLimit({ limit: 2, windowMs: 60_000, store });
         const req = createRequest();
@@ -30,35 +30,35 @@ Deno.test('rateLimit allows requests under the limit and blocks over it', async 
 });
 
 Deno.test('MemoryStore operations', async () => {
-    const store = new MemoryStore(60_000, 'fixed-window');
+    const store = new MemoryStore(60_000);
     try {
         const r1 = await store.increment('k1');
-        assertEquals(r1.totalHits, 1);
+        assertEquals(r1.currentHits, 1);
 
         const r2 = await store.increment('k1');
-        assertEquals(r2.totalHits, 2);
+        assertEquals(r2.currentHits, 2);
 
         await store.decrement('k1');
         const r3 = await store.increment('k1');
-        assertEquals(r3.totalHits, 2);
+        assertEquals(r3.currentHits, 2);
 
         await store.resetKey('k1');
         const r4 = await store.increment('k1');
-        assertEquals(r4.totalHits, 1);
+        assertEquals(r4.currentHits, 1);
 
         await store.increment('k2');
         await store.resetAll();
         const r5 = await store.increment('k1');
         const r6 = await store.increment('k2');
-        assertEquals(r5.totalHits, 1);
-        assertEquals(r6.totalHits, 1);
+        assertEquals(r5.currentHits, 1);
+        assertEquals(r6.currentHits, 1);
     } finally {
         store.shutdown();
     }
 });
 
 Deno.test('generates draft-7 headers by default', async () => {
-    const store = new MemoryStore(60_000, 'fixed-window');
+    const store = new MemoryStore(60_000);
     try {
         const limiter = rateLimit({ limit: 10, windowMs: 60_000, store });
         const result = await limiter(createRequest());
@@ -71,7 +71,7 @@ Deno.test('generates draft-7 headers by default', async () => {
 });
 
 Deno.test('generates draft-6 headers when configured', async () => {
-    const store = new MemoryStore(60_000, 'fixed-window');
+    const store = new MemoryStore(60_000);
     try {
         const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6', store });
         const result = await limiter(createRequest());
@@ -87,14 +87,14 @@ Deno.test('generates draft-6 headers when configured', async () => {
 Deno.test('setInterval unref compatibility — timer does not block', async () => {
     // The MemoryStore constructor checks `'unref' in timer` and calls it
     // This test verifies the store can be created and shut down cleanly in Deno
-    const store = new MemoryStore(1000, 'fixed-window');
+    const store = new MemoryStore(1000);
     const result = await store.increment('test');
-    assertEquals(result.totalHits, 1);
+    assertEquals(result.currentHits, 1);
     store.shutdown();
 });
 
 Deno.test('window expiration with real timer', async () => {
-    const store = new MemoryStore(300, 'fixed-window');
+    const store = new MemoryStore(300);
     try {
         const limiter = rateLimit({ limit: 1, windowMs: 300, store });
         const req = createRequest();

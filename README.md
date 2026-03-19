@@ -18,6 +18,10 @@
 
 Rate limit any HTTP endpoint using the Web Standards `Request`/`Response` API — with built-in support for Express, Fastify, Hono, and Next.js. Swap between fixed-window and sliding-window algorithms, bring your own store, and get IETF-compliant rate limit headers out of the box.
 
+<p align="center">
+  <a href="https://kkonstantinov.github.io/universal-rate-limit/"><strong>Documentation</strong></a> · <a href="https://universal-rate-limit-playground.vercel.app"><strong>Playground</strong></a> · <a href="https://github.com/KKonstantinov/universal-rate-limit"><strong>GitHub</strong></a>
+</p>
+
 ## Features
 
 - **Web Standards** — built on `Request`/`Response`, runs on Node.js, Bun, Deno, and edge runtimes
