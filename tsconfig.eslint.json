@@ -19,7 +19,6 @@
         "examples/*/src",
         "examples/*/test",
         "examples/*/*.config.ts",
-        "tests/integration",
         "docs/.vitepress/theme",
         "*.config.ts"
     ],

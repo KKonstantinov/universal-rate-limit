@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'bun:test';
-import { rateLimit, buildRateLimitResponse } from '../../packages/core/dist/index.mjs';
+import { rateLimit, buildRateLimitResponse } from '../../dist/index.mjs';
 
 describe('Bun.serve integration', () => {
     let server: ReturnType<typeof Bun.serve> | undefined;

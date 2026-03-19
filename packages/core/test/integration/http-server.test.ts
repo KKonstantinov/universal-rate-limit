@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import http from 'node:http';
-import { rateLimit, buildRateLimitResponse } from '../../packages/core/src/index.js';
+import { rateLimit, buildRateLimitResponse } from '../../src/index.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert';
-import { rateLimit, MemoryStore, buildRateLimitResponse } from '../../packages/core/dist/index.mjs';
+import { rateLimit, MemoryStore, buildRateLimitResponse } from '../../dist/index.mjs';
 
 Deno.test('rate limiting through Deno.serve — allow then block', async () => {
     const store = new MemoryStore(60_000, 'fixed-window');

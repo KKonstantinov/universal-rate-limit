@@ -10,8 +10,8 @@ export default tseslint.config(
         ignores: [
             '**/dist/',
             '**/node_modules/',
-            'tests/bun/**',
-            'tests/deno/**',
+            'packages/core/test/bun/**',
+            'packages/core/test/deno/**',
             'scripts/',
             'docs/.vitepress/cache/',
             'docs/.vitepress/dist/',
@@ -55,8 +55,7 @@ export default tseslint.config(
             'packages/redis/test/**/*.ts',
             'packages/middleware/*/test/**/*.ts',
             'examples/*/test/**/*.ts',
-            'examples/shared/**/*.ts',
-            'tests/integration/**/*.ts'
+            'examples/shared/**/*.ts'
         ],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',

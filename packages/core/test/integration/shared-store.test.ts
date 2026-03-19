@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { rateLimit, MemoryStore } from '../../packages/core/src/index.js';
+import { rateLimit, MemoryStore } from '../../src/index.js';
 
 function createRequest(ip = '1.2.3.4'): Request {
     return new Request('http://localhost/', {

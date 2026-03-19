@@ -25,6 +25,10 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "typecheck": "tsgo --noEmit",
+        "test:integration": "pnpm run build && vitest run --config vitest.integration.config.ts",
+        "test:integration:node": "vitest run --config vitest.integration.config.ts",
+        "test:integration:bun": "bun test test/bun/",
+        "test:integration:deno": "deno test --allow-net test/deno/",
         "release:jsr": "npx jsr publish --allow-dirty"
     },
     "keywords": [

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { rateLimit, MemoryStore } from '../../packages/core/dist/index.mjs';
+import { rateLimit, MemoryStore } from '../../dist/index.mjs';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
     return new Request(`http://localhost${path}`, {
