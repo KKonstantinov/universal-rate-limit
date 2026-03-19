@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import express from 'express';
 import type { Server } from 'node:http';
-import { expressRateLimit } from '../src/index.js';
+import { expressRateLimit } from '../../src/index.js';
 
 let server: Server | undefined;
 

@@ -10,7 +10,7 @@
         "build": "pnpm -r run build",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:integration": "pnpm --filter universal-rate-limit run test:integration",
+        "test:integration": "pnpm -r --if-present run test:integration",
         "test:examples": "pnpm --filter '@universal-rate-limit/example-*' --sequential run test:integration",
         "test:all": "pnpm test && pnpm --filter universal-rate-limit run test:integration:bun && pnpm --filter universal-rate-limit run test:integration:deno",
         "typecheck": "pnpm -r run typecheck",

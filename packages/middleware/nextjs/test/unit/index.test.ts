@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { withRateLimit, nextjsRateLimit } from '../src/index.js';
+import { withRateLimit, nextjsRateLimit } from '../../src/index.js';
 
 function createRequest(ip = '30.0.0.1', path = '/'): Request {
     return new Request(`http://localhost${path}`, {

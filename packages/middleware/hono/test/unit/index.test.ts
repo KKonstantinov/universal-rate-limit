@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { honoRateLimit } from '../src/index.js';
+import { honoRateLimit } from '../../src/index.js';
 
 function createApp(options = {}) {
     const app = new Hono();

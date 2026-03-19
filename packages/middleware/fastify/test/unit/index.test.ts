@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { fastifyRateLimit } from '../src/index.js';
+import { fastifyRateLimit } from '../../src/index.js';
 
 let app: FastifyInstance | undefined;
 

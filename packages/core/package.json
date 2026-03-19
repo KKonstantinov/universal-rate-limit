@@ -25,8 +25,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "typecheck": "tsgo --noEmit",
-        "test:integration": "pnpm run build && vitest run --config vitest.integration.config.ts",
-        "test:integration:node": "vitest run --config vitest.integration.config.ts",
+        "test:integration": "pnpm run build && pnpm run test:integration:node && pnpm run test:integration:bun && pnpm run test:integration:deno",
+        "test:integration:node": "vitest run test/integration",
         "test:integration:bun": "bun test test/bun/",
         "test:integration:deno": "deno test --allow-net test/deno/",
         "release:jsr": "npx jsr publish --allow-dirty"

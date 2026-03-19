@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rateLimit, MemoryStore, buildRateLimitResponse } from '../src/index.js';
-import type { Store, RateLimitResult } from '../src/index.js';
+import { rateLimit, MemoryStore, buildRateLimitResponse } from '../../src/index.js';
+import type { Store, RateLimitResult } from '../../src/index.js';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
     return new Request(`http://localhost${path}`, {

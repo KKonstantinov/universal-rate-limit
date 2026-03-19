@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { RedisStore } from '../src/index.js';
-import type { SendCommandFn, RedisReply } from '../src/index.js';
+import { RedisStore } from '../../src/index.js';
+import type { SendCommandFn, RedisReply } from '../../src/index.js';
 import { rateLimit } from 'universal-rate-limit';
-import { INCREMENT_SCRIPT, GET_SCRIPT } from '../src/scripts.js';
+import { INCREMENT_SCRIPT, GET_SCRIPT } from '../../src/scripts.js';
 
 // ── Mock Redis ──────────────────────────────────────────────────────────────
 
