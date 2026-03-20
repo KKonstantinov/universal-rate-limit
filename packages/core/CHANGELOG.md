@@ -1,5 +1,11 @@
 # universal-rate-limit
 
+## 1.1.0
+
+### Minor Changes
+
+- [`c393ec8`](https://github.com/KKonstantinov/universal-rate-limit/commit/c393ec887474bce475c3aeba138f32ea5be58e78) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - add Retry-After header support
+
 ## 1.0.0
 
 ### Major Changes

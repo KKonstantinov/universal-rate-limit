@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/express",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Express middleware for universal-rate-limit",
     "type": "module",
     "sideEffects": false,
