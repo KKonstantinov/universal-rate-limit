@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react';
 import type { Algorithm } from 'universal-rate-limit';
 import type { RequestLogEntry } from '../lib/types';
+import { getWindowWeight } from '../lib/window-utils';
 import { CountdownTimer } from './countdown-timer';
+import { EpochWindowTimer } from './epoch-window-timer';
+import { FixedWindowDiagram } from './fixed-window-diagram';
 import { RecoveryTimer } from './recovery-timer';
 import { RetryAfterTimer } from './retry-after-timer';
+import { SlidingWindowDiagram } from './sliding-window-diagram';
+import { StatusBadge } from './status-badge';
 
 interface StatusDashboardProps {
     latestEntry: RequestLogEntry | null;
@@ -32,17 +37,15 @@ function interpolateRemaining(entry: RequestLogEntry, windowMs: number): number 
             return entry.remaining;
         }
         // Previous hits are decaying
-        const windowStart = resetMs - windowMs;
-        const elapsed = now - windowStart;
-        const weight = Math.max(0, 1 - elapsed / windowMs);
+        const elapsed = now - (resetMs - windowMs);
+        const weight = getWindowWeight(elapsed, windowMs);
         const interpolatedHits = Math.ceil(entry.previousWindowHits * weight + entry.currentWindowHits);
         return Math.max(0, entry.limit - interpolatedHits);
     }
 
     // Past resetTime — current hits have become "previous" in the new window
     // and are now decaying. Previous hits from the original window are fully decayed (weight = 0 at resetTime).
-    const elapsedInNewWindow = now - resetMs;
-    const weight = Math.max(0, 1 - elapsedInNewWindow / windowMs);
+    const weight = getWindowWeight(now - resetMs, windowMs);
     const decayingHits = Math.ceil(entry.currentWindowHits * weight);
     return Math.max(0, Math.min(entry.limit, entry.limit - decayingHits));
 }
@@ -132,17 +135,17 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                 <div className="text-center min-w-24">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                         {algorithm === 'sliding-window' ? (limited ? 'Retry After' : 'Full Recovery') : 'Window Reset'}
-                        <span
-                            className="ml-1 inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none text-gray-400 dark:border-gray-500 dark:text-gray-500"
-                            title={
-                                algorithm === 'sliding-window'
+                        <span className="relative ml-1 inline-flex group">
+                            <span className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none text-gray-400 dark:border-gray-500 dark:text-gray-500">
+                                ?
+                            </span>
+                            <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 w-56 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-relaxed text-gray-100 shadow-lg dark:bg-gray-100 dark:text-gray-900">
+                                {algorithm === 'sliding-window'
                                     ? limited
                                         ? 'Time until the server will accept requests again, based on the Retry-After response header.'
                                         : 'Time until all request quota is fully restored. In a sliding window, hits decay gradually — current window hits become "previous" at the window boundary, then take another full window to fully decay. Full recovery can take up to 2x the window duration.'
-                                    : 'Time until the current fixed window expires and the request counter resets to zero. All quota is restored instantly at this point.'
-                            }
-                        >
-                            ?
+                                    : 'Time until the current fixed window expires and the request counter resets to zero. All quota is restored instantly at this point.'}
+                            </span>
                         </span>
                     </span>
                     <div className="text-lg font-mono font-bold tabular-nums">
@@ -156,6 +159,8 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                             ) : (
                                 resetTime && <CountdownTimer resetTime={resetTime} windowMs={windowMs} />
                             )
+                        ) : algorithm === 'fixed-window' ? (
+                            <EpochWindowTimer windowMs={windowMs} />
                         ) : (
                             '--:--'
                         )}
@@ -166,21 +171,37 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                 <div>
                     {latestEntry ? (
                         limited ? (
-                            <span className="inline-flex items-center rounded-full bg-red-100 px-3 py-1 text-sm font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                            <StatusBadge variant="error" className="rounded-full px-3 py-1 text-sm">
                                 RATE LIMITED
-                            </span>
+                            </StatusBadge>
                         ) : (
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <StatusBadge variant="success" className="rounded-full px-3 py-1 text-sm">
                                 OK
-                            </span>
+                            </StatusBadge>
                         )
                     ) : (
-                        <span className="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-sm font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        <StatusBadge variant="idle" className="rounded-full px-3 py-1 text-sm font-medium">
                             IDLE
-                        </span>
+                        </StatusBadge>
                     )}
                 </div>
             </div>
+
+            {/* Algorithm visualization */}
+            {algorithm === 'fixed-window' && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+                    <FixedWindowDiagram
+                        windowMs={windowMs}
+                        hits={windowExpired ? 0 : (latestEntry?.currentWindowHits ?? 0)}
+                        limit={latestEntry?.limit ?? 10}
+                    />
+                </div>
+            )}
+            {algorithm === 'sliding-window' && latestEntry && latestEntry.currentWindowHits + latestEntry.previousWindowHits > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+                    <SlidingWindowDiagram entry={latestEntry} windowMs={windowMs} limit={limit} />
+                </div>
+            )}
         </div>
     );
 }

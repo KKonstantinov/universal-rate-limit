@@ -82,7 +82,7 @@ function parseScriptResult(reply: RedisReply, windowMs: number): IncrementResult
 export class RedisStore implements Store {
     private readonly sendCommand: SendCommandFn;
     private readonly windowMs: number;
-    private readonly prefix: string;
+    readonly prefix: string;
     private readonly resetExpiryOnChange: boolean;
 
     private incrementShaPromise: Promise<string> | undefined;
@@ -93,6 +93,17 @@ export class RedisStore implements Store {
         this.windowMs = options.windowMs;
         this.prefix = options.prefix ?? 'rl:';
         this.resetExpiryOnChange = options.resetExpiryOnChange ?? false;
+    }
+
+    /** Fetch the current hit count and TTL for `key` without incrementing. */
+    async get(key: string): Promise<IncrementResult | undefined> {
+        const fullKey = this.prefix + key;
+        const [hits, ttl] = await Promise.all([this.sendCommand('GET', fullKey), this.sendCommand('PTTL', fullKey)]);
+        if (hits === null) return undefined;
+        const currentHits = Number(hits);
+        const timeToExpire = Number(ttl);
+        const resetTime = new Date(Date.now() + (timeToExpire > 0 ? timeToExpire : this.windowMs));
+        return { currentHits, previousHits: 0, resetTime };
     }
 
     /**

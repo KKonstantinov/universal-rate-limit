@@ -24,6 +24,10 @@ export interface IncrementResult {
  * use a Redis-backed store for distributed environments.
  */
 export interface Store {
+    /** Key prefix prepended to every rate limit key in the store. */
+    prefix?: string;
+    /** Fetch a client's hit counts and reset time without incrementing. */
+    get?(key: string): MaybePromise<IncrementResult | undefined>;
     /** Increment the hit count for `key` and return the updated totals. */
     increment(key: string): MaybePromise<IncrementResult>;
     /** Decrement the hit count for `key` (e.g. to undo a counted request). */
@@ -32,6 +36,8 @@ export interface Store {
     resetKey(key: string): MaybePromise<void>;
     /** Remove all rate limit data for every key in the store. */
     resetAll(): MaybePromise<void>;
+    /** Release any resources held by the store (timers, connections, etc.). */
+    shutdown?(): MaybePromise<void>;
 }
 
 /**
@@ -337,14 +343,16 @@ interface WindowEntry {
  * deployments.
  */
 export class MemoryStore implements Store {
+    readonly prefix?: string;
     private readonly windowMs: number;
     private readonly current = new Map<string, WindowEntry>();
     private readonly previous = new Map<string, WindowEntry>();
     private timer: ReturnType<typeof setInterval> | undefined;
 
     /** @param windowMs - Duration of the rate limit window in milliseconds. */
-    constructor(windowMs: number) {
+    constructor(windowMs: number, prefix?: string) {
         this.windowMs = windowMs;
+        this.prefix = prefix;
 
         this.timer = setInterval(() => {
             this.cleanup();
@@ -354,6 +362,18 @@ export class MemoryStore implements Store {
         if (typeof this.timer === 'object' && 'unref' in this.timer) {
             this.timer.unref();
         }
+    }
+
+    /** @inheritdoc */
+    get(key: string): IncrementResult | undefined {
+        const now = Date.now();
+        const entry = this.current.get(key);
+        if (!entry || entry.resetTime <= now) return undefined;
+
+        const prev = this.previous.get(key);
+        const previousHits = prev && prev.resetTime > now - this.windowMs ? prev.hits : 0;
+
+        return { currentHits: entry.hits, previousHits, resetTime: entry.resetDate };
     }
 
     /** @inheritdoc */
@@ -400,7 +420,7 @@ export class MemoryStore implements Store {
         this.previous.clear();
     }
 
-    /** Stop the background cleanup interval. Call this when the store is no longer needed. */
+    /** @inheritdoc */
     shutdown(): void {
         if (this.timer) {
             clearInterval(this.timer);

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { RequestLogEntry } from '../lib/types';
 import { HeaderDisplay } from './header-display';
+import { StatusBadge } from './status-badge';
 
 interface RequestEntryProps {
     entry: RequestLogEntry;
@@ -31,15 +32,9 @@ export function RequestEntry({ entry }: RequestEntryProps) {
                 <span className="w-8 text-xs font-mono text-gray-400 dark:text-gray-600">#{String(entry.id)}</span>
 
                 {/* Status badge */}
-                <span
-                    className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-bold ${
-                        entry.limited
-                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    }`}
-                >
+                <StatusBadge variant={entry.limited ? 'error' : 'success'} className="rounded px-2 py-0.5 text-xs font-bold">
                     {String(entry.status)}
-                </span>
+                </StatusBadge>
 
                 {/* Remaining / Limit */}
                 <span className="text-sm tabular-nums text-gray-600 dark:text-gray-400">

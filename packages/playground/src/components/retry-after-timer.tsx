@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import type { RequestLogEntry } from '../lib/types';
+import { useCountdownTimer } from '../hooks/use-countdown-timer';
 
 interface RetryAfterTimerProps {
     entry: RequestLogEntry;
@@ -20,36 +21,8 @@ function getRetryAfterSeconds(entry: RequestLogEntry): number {
 }
 
 export function RetryAfterTimer({ entry }: RetryAfterTimerProps) {
-    const [secondsLeft, setSecondsLeft] = useState(() => getRetryAfterSeconds(entry));
-    const flashTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
-    const [flash, setFlash] = useState(false);
-    const hasFlashed = useRef(false);
-
-    useEffect(() => {
-        setSecondsLeft(getRetryAfterSeconds(entry));
-        hasFlashed.current = false;
-        setFlash(false);
-    }, [entry]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const next = getRetryAfterSeconds(entry);
-            setSecondsLeft(next);
-
-            if (next === 0 && !hasFlashed.current) {
-                hasFlashed.current = true;
-                setFlash(true);
-                flashTimeout.current = setTimeout(() => {
-                    setFlash(false);
-                }, 1000);
-            }
-        }, 200);
-
-        return () => {
-            clearInterval(interval);
-            clearTimeout(flashTimeout.current);
-        };
-    }, [entry]);
+    const getSeconds = useCallback(() => getRetryAfterSeconds(entry), [entry]);
+    const { secondsLeft, flash } = useCountdownTimer(getSeconds);
 
     if (secondsLeft === 0) {
         return (

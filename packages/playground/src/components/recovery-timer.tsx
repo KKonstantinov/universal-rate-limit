@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import type { RequestLogEntry } from '../lib/types';
+import { formatDuration } from '../lib/format-utils';
+import { useCountdownTimer } from '../hooks/use-countdown-timer';
 
 interface RecoveryTimerProps {
     entry: RequestLogEntry;
@@ -23,36 +25,8 @@ function secondsUntilRecovered(entry: RequestLogEntry, windowMs: number): number
 }
 
 export function RecoveryTimer({ entry, windowMs }: RecoveryTimerProps) {
-    const [secondsLeft, setSecondsLeft] = useState(() => secondsUntilRecovered(entry, windowMs));
-    const [flash, setFlash] = useState(false);
-    const flashTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
-    const hasFlashed = useRef(false);
-
-    useEffect(() => {
-        setSecondsLeft(secondsUntilRecovered(entry, windowMs));
-        hasFlashed.current = false;
-        setFlash(false);
-    }, [entry, windowMs]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const next = secondsUntilRecovered(entry, windowMs);
-            setSecondsLeft(next);
-
-            if (next === 0 && !hasFlashed.current) {
-                hasFlashed.current = true;
-                setFlash(true);
-                flashTimeout.current = setTimeout(() => {
-                    setFlash(false);
-                }, 1000);
-            }
-        }, 200);
-
-        return () => {
-            clearInterval(interval);
-            clearTimeout(flashTimeout.current);
-        };
-    }, [entry, windowMs]);
+    const getSeconds = useCallback(() => secondsUntilRecovered(entry, windowMs), [entry, windowMs]);
+    const { secondsLeft, flash } = useCountdownTimer(getSeconds);
 
     if (secondsLeft === 0) {
         return (
@@ -60,12 +34,7 @@ export function RecoveryTimer({ entry, windowMs }: RecoveryTimerProps) {
         );
     }
 
-    const minutes = Math.floor(secondsLeft / 60);
-    const secs = secondsLeft % 60;
-
     return (
-        <span className={`transition-colors duration-500 ${secondsLeft <= 3 ? 'text-red-500' : ''}`}>
-            {minutes > 0 ? `${String(minutes)}:${String(secs).padStart(2, '0')}` : `${String(secondsLeft)}s`}
-        </span>
+        <span className={`transition-colors duration-500 ${secondsLeft <= 3 ? 'text-red-500' : ''}`}>{formatDuration(secondsLeft)}</span>
     );
 }

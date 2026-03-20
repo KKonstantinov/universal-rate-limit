@@ -1,6 +1,7 @@
 'use client';
 
 import type { PlaygroundConfig } from '../lib/types';
+import { ToggleButton } from './toggle-button';
 
 interface ConfigPanelProps {
     config: PlaygroundConfig;
@@ -41,20 +42,16 @@ export function ConfigPanel({ config, onChange, disabled }: ConfigPanelProps) {
                     <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Window</label>
                     <div className="flex gap-1">
                         {WINDOW_PRESETS.map(preset => (
-                            <button
+                            <ToggleButton
                                 key={preset.value}
+                                active={config.windowMs === preset.value}
                                 onClick={() => {
                                     onChange({ windowMs: preset.value });
                                 }}
                                 disabled={disabled}
-                                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    config.windowMs === preset.value
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-                                } border border-gray-300 dark:border-gray-700 disabled:opacity-50`}
                             >
                                 {preset.label}
-                            </button>
+                            </ToggleButton>
                         ))}
                     </div>
                 </div>
@@ -64,20 +61,16 @@ export function ConfigPanel({ config, onChange, disabled }: ConfigPanelProps) {
                     <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Algorithm</label>
                     <div className="flex gap-1">
                         {(['fixed-window', 'sliding-window'] as const).map(algo => (
-                            <button
+                            <ToggleButton
                                 key={algo}
+                                active={config.algorithm === algo}
                                 onClick={() => {
                                     onChange({ algorithm: algo });
                                 }}
                                 disabled={disabled}
-                                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    config.algorithm === algo
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-                                } border border-gray-300 dark:border-gray-700 disabled:opacity-50`}
                             >
                                 {algo === 'fixed-window' ? 'Fixed' : 'Sliding'}
-                            </button>
+                            </ToggleButton>
                         ))}
                     </div>
                 </div>
@@ -87,20 +80,16 @@ export function ConfigPanel({ config, onChange, disabled }: ConfigPanelProps) {
                     <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Headers</label>
                     <div className="flex gap-1">
                         {(['draft-7', 'draft-6'] as const).map(version => (
-                            <button
+                            <ToggleButton
                                 key={version}
+                                active={config.headers === version}
                                 onClick={() => {
                                     onChange({ headers: version });
                                 }}
                                 disabled={disabled}
-                                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                                    config.headers === version
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-                                } border border-gray-300 dark:border-gray-700 disabled:opacity-50`}
                             >
                                 {version === 'draft-7' ? 'Draft 7' : 'Draft 6'}
-                            </button>
+                            </ToggleButton>
                         ))}
                     </div>
                 </div>

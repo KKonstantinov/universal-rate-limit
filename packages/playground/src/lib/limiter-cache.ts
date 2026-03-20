@@ -1,5 +1,5 @@
 import { rateLimit, MemoryStore } from 'universal-rate-limit';
-import type { Algorithm, HeadersVersion } from 'universal-rate-limit';
+import type { PlaygroundConfig } from './types';
 
 /** Maximum number of cached limiter instances (one per IP). */
 const MAX_CACHE_SIZE = 30;
@@ -24,13 +24,7 @@ export function getClientIp(request: Request): string {
     return '127.0.0.1';
 }
 
-export interface LimiterConfig {
-    limit: number;
-    windowMs: number;
-    algorithm: Algorithm;
-    headers: HeadersVersion;
-    legacyHeaders: boolean;
-}
+export type LimiterConfig = PlaygroundConfig;
 
 interface CachedEntry {
     config: LimiterConfig;
