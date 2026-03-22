@@ -82,7 +82,8 @@ export function useRateLimiter() {
 
             setLog(prev => [entry, ...prev]);
             return entry;
-        } catch {
+        } catch (error) {
+            console.error('[rate-limiter] request failed:', error);
             return null;
         }
     }, []);
@@ -117,10 +118,16 @@ export function useRateLimiter() {
     );
 
     const resetStore = useCallback(async () => {
-        await fetch('/api/reset', { method: 'POST' });
+        setIsResetting(true);
+        try {
+            await fetch('/api/reset', { method: 'POST' });
+        } catch (error) {
+            console.error('[rate-limiter] reset failed:', error);
+        }
         setConfigStale(false);
         setLog([]);
         nextId.current = 1;
+        setIsResetting(false);
     }, []);
 
     const clearLog = useCallback(() => {
@@ -137,7 +144,11 @@ export function useRateLimiter() {
         setIsResetting(true);
         setLog([]);
         nextId.current = 1;
-        await fetch('/api/reset', { method: 'POST' });
+        try {
+            await fetch('/api/reset', { method: 'POST' });
+        } catch (error) {
+            console.error('[rate-limiter] config reset failed:', error);
+        }
         setIsResetting(false);
     }, []);
 

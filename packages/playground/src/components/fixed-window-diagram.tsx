@@ -13,7 +13,7 @@ export function FixedWindowDiagram({ windowMs, hits, limit }: FixedWindowDiagram
     const [elapsed, setElapsed] = useState(() => getWindowElapsedFraction(windowMs));
     const [flash, setFlash] = useState(false);
     const prevIndexRef = useRef(getWindowIndex(windowMs));
-    const flashTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
         setElapsed(getWindowElapsedFraction(windowMs));
@@ -21,23 +21,27 @@ export function FixedWindowDiagram({ windowMs, hits, limit }: FixedWindowDiagram
     }, [windowMs]);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            const currentIndex = getWindowIndex(windowMs);
-
-            if (currentIndex !== prevIndexRef.current) {
-                prevIndexRef.current = currentIndex;
-                setFlash(true);
-                clearTimeout(flashTimeoutRef.current);
-                flashTimeoutRef.current = setTimeout(() => {
-                    setFlash(false);
-                }, 800);
-            }
-
+        const updateElapsed = () => {
             setElapsed(getWindowElapsedFraction(windowMs));
-        }, 50);
+        };
+        updateElapsed();
+
+        const progressInterval = setInterval(updateElapsed, 250);
+
+        const now = Date.now();
+        const nextBoundary = (Math.floor(now / windowMs) + 1) * windowMs;
+        const boundaryTimeout = setTimeout(() => {
+            prevIndexRef.current = getWindowIndex(windowMs);
+            setFlash(true);
+            clearTimeout(flashTimeoutRef.current);
+            flashTimeoutRef.current = setTimeout(() => {
+                setFlash(false);
+            }, 800);
+        }, nextBoundary - now);
 
         return () => {
-            clearInterval(interval);
+            clearInterval(progressInterval);
+            clearTimeout(boundaryTimeout);
             clearTimeout(flashTimeoutRef.current);
         };
     }, [windowMs]);

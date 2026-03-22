@@ -1,6 +1,18 @@
 import type { Algorithm, HeadersVersion } from 'universal-rate-limit';
 import { getLimiter, getClientIp, getStoreHits, checkApiRateLimit } from '../../../lib/limiter-cache';
 
+const ALLOWED_ALGORITHMS: Algorithm[] = ['fixed-window', 'sliding-window'];
+const ALLOWED_HEADERS: HeadersVersion[] = ['draft-7', 'draft-6'];
+
+function parseNumParam(value: string | null, fallback: number): number {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function pickAllowed<T extends string>(value: string | null, allowed: readonly T[], fallback: T): T {
+    return allowed.includes(value as T) ? (value as T) : fallback;
+}
+
 export async function GET(request: Request) {
     const blocked = await checkApiRateLimit(request);
     if (blocked) return blocked;
@@ -10,10 +22,10 @@ export async function GET(request: Request) {
     const ip = getClientIp(request);
 
     const config = {
-        limit: Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? '10'))),
-        windowMs: Math.max(1000, Number(url.searchParams.get('windowMs') ?? '30000')),
-        algorithm: (url.searchParams.get('algorithm') ?? 'fixed-window') as Algorithm,
-        headers: (url.searchParams.get('headers') ?? 'draft-7') as HeadersVersion,
+        limit: Math.min(100, Math.max(1, parseNumParam(url.searchParams.get('limit'), 10))),
+        windowMs: Math.max(1000, parseNumParam(url.searchParams.get('windowMs'), 30_000)),
+        algorithm: pickAllowed(url.searchParams.get('algorithm'), ALLOWED_ALGORITHMS, 'fixed-window'),
+        headers: pickAllowed(url.searchParams.get('headers'), ALLOWED_HEADERS, 'draft-7'),
         legacyHeaders: url.searchParams.get('legacyHeaders') === 'true'
     };
 

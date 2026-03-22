@@ -25,3 +25,11 @@ export function getWindowElapsedFraction(windowMs: number): number {
     const now = Date.now();
     return Math.min(1, (now - getWindowStart(windowMs, now)) / windowMs);
 }
+
+export function computeSlidingWeight(resetTimeIso: string, windowMs: number, now = Date.now()): number {
+    const resetMs = new Date(resetTimeIso).getTime();
+    if (now < resetMs) {
+        return getWindowWeight(now - (resetMs - windowMs), windowMs);
+    }
+    return getWindowWeight(now - resetMs, windowMs);
+}

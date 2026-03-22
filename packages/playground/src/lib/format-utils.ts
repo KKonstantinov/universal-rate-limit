@@ -7,10 +7,11 @@
  *   `M:SS` is only used if `secondsLeft >= 60`.
  */
 export function formatDuration(secondsLeft: number, showMinutes = false): string {
-    const minutes = Math.floor(secondsLeft / 60);
-    const secs = secondsLeft % 60;
+    const clamped = Math.max(0, secondsLeft);
+    const minutes = Math.floor(clamped / 60);
+    const secs = clamped % 60;
     if (showMinutes || minutes > 0) {
         return `${String(minutes)}:${String(secs).padStart(2, '0')}`;
     }
-    return `${String(secondsLeft)}s`;
+    return `${String(clamped)}s`;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { RequestLogEntry } from '../lib/types';
-import { getWindowWeight } from '../lib/window-utils';
+import { computeSlidingWeight } from '../lib/window-utils';
 
 interface SlidingWindowDiagramProps {
     entry: RequestLogEntry;
@@ -19,15 +19,12 @@ interface WindowState {
 function computeWindowState(entry: RequestLogEntry, windowMs: number): WindowState {
     const now = Date.now();
     const resetMs = new Date(entry.resetTime).getTime();
+    const weight = computeSlidingWeight(entry.resetTime, windowMs, now);
 
     if (now < resetMs) {
-        const elapsed = now - (resetMs - windowMs);
-        const weight = getWindowWeight(elapsed, windowMs);
         return { weight, prevHits: entry.previousWindowHits, currHits: entry.currentWindowHits };
     }
 
-    // Past resetTime — current hits became "previous" in the new window and are decaying
-    const weight = getWindowWeight(now - resetMs, windowMs);
     return { weight, prevHits: entry.currentWindowHits, currHits: 0 };
 }
 

@@ -55,21 +55,20 @@ function handleLimited(
         handler: options.handler,
         message: options.message,
         statusCode: options.statusCode
-    }).then(
-        response => {
-            res.status(response.status);
-            void response.text().then(body => {
+    })
+        .then(response =>
+            response.text().then(body => {
                 const contentType = response.headers.get('content-type');
+                res.status(response.status);
                 if (contentType) {
                     res.setHeader('Content-Type', contentType);
                 }
                 res.send(body);
-            });
-        },
-        (error: unknown) => {
+            })
+        )
+        .catch((error: unknown) => {
             next(error);
-        }
-    );
+        });
 }
 
 /**

@@ -73,13 +73,17 @@ function configsMatch(a: LimiterConfig, b: LimiterConfig): boolean {
 }
 
 function evictOldest(cache: Map<string, CachedEntry>): void {
-    const oldest = cache.keys().next();
-    if (!oldest.done) {
-        const entry = cache.get(oldest.value);
-        if (entry) {
-            entry.store.shutdown();
+    let oldestKey: string | undefined;
+    let oldestTime = Infinity;
+    for (const [key, entry] of cache) {
+        if (entry.lastAccessed < oldestTime) {
+            oldestTime = entry.lastAccessed;
+            oldestKey = key;
         }
-        cache.delete(oldest.value);
+    }
+    if (oldestKey !== undefined) {
+        cache.get(oldestKey)?.store.shutdown();
+        cache.delete(oldestKey);
     }
 }
 
@@ -145,17 +149,17 @@ export function getStoreHits(ip: string): StoreHits {
     }
 
     const store = entry.store as unknown as {
-        current: Map<string, WindowEntry>;
-        previous: Map<string, WindowEntry>;
-        windowMs: number;
+        current: Map<string, WindowEntry> | undefined;
+        previous: Map<string, WindowEntry> | undefined;
+        windowMs: number | undefined;
     };
 
     const now = Date.now();
-    const currentEntry = store.current.get(ip);
-    const previousEntry = store.previous.get(ip);
+    const currentEntry = store.current?.get(ip);
+    const previousEntry = store.previous?.get(ip);
 
     const currentWindowHits = currentEntry && currentEntry.resetTime > now ? currentEntry.hits : 0;
-    const previousWindowHits = previousEntry && previousEntry.resetTime > now - store.windowMs ? previousEntry.hits : 0;
+    const previousWindowHits = previousEntry && previousEntry.resetTime > now - (store.windowMs ?? 0) ? previousEntry.hits : 0;
 
     return { currentWindowHits, previousWindowHits };
 }

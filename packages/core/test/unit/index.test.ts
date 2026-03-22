@@ -11,7 +11,7 @@ function createRequest(ip = '1.2.3.4', path = '/'): Request {
 describe('rateLimit', () => {
     describe('fixed window', () => {
         it('allows requests under the limit', async () => {
-            const limiter = rateLimit({ limit: 3, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 3, windowMs: 60_000, algorithm: 'fixed-window' });
             const req = createRequest();
 
             const r1 = await limiter(req);
@@ -29,7 +29,7 @@ describe('rateLimit', () => {
         });
 
         it('blocks requests over the limit', async () => {
-            const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 2, windowMs: 60_000, algorithm: 'fixed-window' });
             const req = createRequest();
 
             await limiter(req);
@@ -41,7 +41,7 @@ describe('rateLimit', () => {
         });
 
         it('tracks different keys separately', async () => {
-            const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 1, windowMs: 60_000, algorithm: 'fixed-window' });
 
             const r1 = await limiter(createRequest('1.1.1.1'));
             const r2 = await limiter(createRequest('2.2.2.2'));
@@ -334,19 +334,24 @@ describe('rateLimit', () => {
             const limiter = rateLimit({
                 limit: 1,
                 windowMs: 60_000,
+                algorithm: 'fixed-window',
                 skip: (req: Request) => req.url.includes('/health')
             });
 
             const healthReq = createRequest('1.2.3.4', '/health');
-            const normalReq = createRequest();
 
-            const r1 = await limiter(healthReq);
+            // Fire the health endpoint multiple times — should never be counted
+            await limiter(healthReq);
+            await limiter(healthReq);
+            await limiter(healthReq);
+
+            const normalReq = createRequest('1.2.3.4', '/');
+            const r1 = await limiter(normalReq);
             expect(r1.limited).toBe(false);
-            expect(r1.remaining).toBe(1); // Full limit since skipped
+            expect(r1.remaining).toBe(0);
 
-            // Normal request should still have full limit since health was skipped
             const r2 = await limiter(normalReq);
-            expect(r2.limited).toBe(false);
+            expect(r2.limited).toBe(true);
         });
 
         it('uses custom statusCode', async () => {

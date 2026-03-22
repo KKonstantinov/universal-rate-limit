@@ -52,9 +52,9 @@ function rateLimitPlugin(fastify: FastifyInstance, options: FastifyRateLimitOpti
 
             const body = await response.text();
             const contentType = response.headers.get('content-type');
-            void reply.code(response.status);
+            reply.code(response.status);
             if (contentType) {
-                void reply.header('content-type', contentType);
+                reply.header('content-type', contentType);
             }
             return reply.send(body);
         }

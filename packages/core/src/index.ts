@@ -142,7 +142,7 @@ export interface RateLimitResult {
 // ── Default key generator ────────────────────────────────────────────────────
 
 /** Common proxy/CDN headers that carry the client's real IP address. */
-const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
+const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'] as const;
 
 /**
  * Default key generator that extracts the client IP from well-known proxy
@@ -449,7 +449,7 @@ export class MemoryStore implements Store {
 
 /** Check if a value is a Promise (thenable). */
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-    return typeof value === 'object' && value !== null && 'then' in value;
+    return typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>)['then'] === 'function';
 }
 
 // ── rateLimit factory ────────────────────────────────────────────────────────
@@ -475,10 +475,18 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
  * ```
  */
 export function rateLimit<TRequest = Request>(
-    options: RateLimitOptions<TRequest> = {} as RateLimitOptions<TRequest>
+    options: RateLimitOptions<TRequest> = {}
 ): (request: TRequest) => RateLimitResult | Promise<RateLimitResult> {
     const windowMs = options.windowMs ?? 60_000;
     const limitOption = options.limit ?? 60;
+
+    if (windowMs <= 0) {
+        throw new RangeError(`windowMs must be a positive number, got ${String(windowMs)}`);
+    }
+    if (typeof limitOption === 'number' && limitOption < 0) {
+        throw new RangeError(`limit must be a non-negative number, got ${String(limitOption)}`);
+    }
+
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
     const algorithm = options.algorithm ?? 'sliding-window';
     const headersVersion = options.headers ?? 'draft-7';
@@ -495,29 +503,7 @@ export function rateLimit<TRequest = Request>(
 
     const strategy = algorithmStrategies[algorithm];
 
-    function makeSkipResult(limit: number, now: number): RateLimitResult {
-        const resetTimeMs = now + windowMs;
-        return {
-            limited: false,
-            limit,
-            remaining: limit,
-            resetTime: new Date(resetTimeMs),
-            headers: generateHeaders(
-                headersVersion,
-                limit,
-                limit,
-                resetTimeMs,
-                now,
-                windowSeconds,
-                legacyHeaders,
-                false,
-                0,
-                staticPolicyHeader
-            )
-        };
-    }
-
-    function makePassResult(limit: number, now: number): RateLimitResult {
+    function makeBypassResult(limit: number, now: number): RateLimitResult {
         const resetTimeMs = now + windowMs;
         return {
             limited: false,
@@ -583,14 +569,14 @@ export function rateLimit<TRequest = Request>(
                 return incrementResult.then(
                     r => buildResult(r, limit, now),
                     () => {
-                        if (passOnStoreError) return makePassResult(limit, now);
+                        if (passOnStoreError) return makeBypassResult(limit, now);
                         throw new Error('Rate limit store error');
                     }
                 );
             }
             return buildResult(incrementResult, limit, now);
         } catch {
-            if (passOnStoreError) return makePassResult(limit, now);
+            if (passOnStoreError) return makeBypassResult(limit, now);
             throw new Error('Rate limit store error');
         }
     }
@@ -603,7 +589,7 @@ export function rateLimit<TRequest = Request>(
             const shouldSkip = await skip(request);
             if (shouldSkip) {
                 const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
-                return makeSkipResult(limit, now);
+                return makeBypassResult(limit, now);
             }
         }
 

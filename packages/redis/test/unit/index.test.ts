@@ -41,7 +41,14 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
     }
 
     function handleScript(args: string[]): RedisReply {
+        const subcommand = args[1]?.toUpperCase();
+        if (subcommand !== 'LOAD') {
+            throw new TypeError(`Mock Redis: unsupported SCRIPT subcommand "${subcommand}"`);
+        }
         const script = args[2];
+        if (typeof script !== 'string') {
+            throw new TypeError('Mock Redis: SCRIPT LOAD requires a script argument');
+        }
         const hash = sha1(script);
         scripts.set(hash, script);
         return hash;
@@ -61,6 +68,14 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
             throw new Error('NOSCRIPT No matching script. Please use EVAL.');
         }
 
+        const numKeys = Number(args[2]);
+        const keys = args.slice(3, 3 + numKeys);
+        const argv = args.slice(3 + numKeys);
+        return executeLuaScript(script, keys, argv);
+    }
+
+    function handleEval(args: string[]): RedisReply {
+        const script = args[1];
         const numKeys = Number(args[2]);
         const keys = args.slice(3, 3 + numKeys);
         const argv = args.slice(3 + numKeys);
@@ -89,7 +104,10 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
 
     function handleScan(args: string[]): RedisReply {
         const pattern = args[3];
-        const prefix = pattern.replace('*', '');
+        if (!pattern.endsWith('*')) {
+            throw new Error(`Mock Redis: SCAN only supports trailing-wildcard patterns, got "${pattern}"`);
+        }
+        const prefix = pattern.slice(0, -1);
         const matchingKeys: string[] = [];
         for (const key of store.keys()) {
             if (key.startsWith(prefix)) {
@@ -103,6 +121,7 @@ function createMockRedis(options?: { failNextEvalsha?: boolean }): {
     const commandHandlers: Partial<Record<string, (args: string[]) => RedisReply>> = {
         SCRIPT: handleScript,
         EVALSHA: handleEvalsha,
+        EVAL: handleEval,
         DECR: handleDecr,
         DEL: handleDel,
         SCAN: handleScan

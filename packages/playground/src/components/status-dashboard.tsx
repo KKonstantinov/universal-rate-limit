@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { Algorithm } from 'universal-rate-limit';
 import type { RequestLogEntry } from '../lib/types';
-import { getWindowWeight } from '../lib/window-utils';
+import { computeSlidingWeight } from '../lib/window-utils';
 import { CountdownTimer } from './countdown-timer';
 import { EpochWindowTimer } from './epoch-window-timer';
 import { FixedWindowDiagram } from './fixed-window-diagram';
@@ -31,21 +31,15 @@ function interpolateRemaining(entry: RequestLogEntry, windowMs: number): number 
     const resetMs = new Date(entry.resetTime).getTime();
 
     if (now < resetMs) {
-        // Still in the original window
         if (entry.previousWindowHits === 0) {
-            // Only current window hits — no decay yet
             return entry.remaining;
         }
-        // Previous hits are decaying
-        const elapsed = now - (resetMs - windowMs);
-        const weight = getWindowWeight(elapsed, windowMs);
+        const weight = computeSlidingWeight(entry.resetTime, windowMs, now);
         const interpolatedHits = Math.ceil(entry.previousWindowHits * weight + entry.currentWindowHits);
         return Math.max(0, entry.limit - interpolatedHits);
     }
 
-    // Past resetTime — current hits have become "previous" in the new window
-    // and are now decaying. Previous hits from the original window are fully decayed (weight = 0 at resetTime).
-    const weight = getWindowWeight(now - resetMs, windowMs);
+    const weight = computeSlidingWeight(entry.resetTime, windowMs, now);
     const decayingHits = Math.ceil(entry.currentWindowHits * weight);
     return Math.max(0, Math.min(entry.limit, entry.limit - decayingHits));
 }

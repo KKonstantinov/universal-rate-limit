@@ -23,6 +23,7 @@
         "build": "tsdown",
         "dev": "tsdown --watch",
         "test": "vitest run",
+        "test:integration": "vitest run --config vitest.integration.config.ts",
         "test:watch": "vitest",
         "typecheck": "tsgo --noEmit"
     },
@@ -47,5 +48,9 @@
         "access": "public",
         "provenance": true
     },
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "redis": "^5.11.0",
+        "testcontainers": "^11.13.0"
+    }
 }
