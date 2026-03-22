@@ -350,9 +350,9 @@ export class MemoryStore implements Store {
     private timer: ReturnType<typeof setInterval> | undefined;
 
     /** @param windowMs - Duration of the rate limit window in milliseconds. */
-    constructor(windowMs: number, prefix?: string) {
+    constructor(windowMs: number, prefix: string = '') {
         this.windowMs = windowMs;
-        this.prefix = prefix;
+        this.prefix = prefix || undefined;
 
         this.timer = setInterval(() => {
             this.cleanup();
