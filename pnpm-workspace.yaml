@@ -3,6 +3,7 @@ packages:
     - packages/redis
     - packages/middleware/*
     - packages/benchmarks
+    - packages/playground
     - examples/*
 
 onlyBuiltDependencies: '["lefthook", "esbuild"]'

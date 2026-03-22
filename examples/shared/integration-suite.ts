@@ -6,7 +6,10 @@ export interface SuiteOptions {
 }
 
 export function rateLimitIntegrationSuite(framework: string, options: SuiteOptions = {}) {
-    const baseUrl = process.env['TEST_BASE_URL']!;
+    const baseUrl = process.env['TEST_BASE_URL'];
+    if (!baseUrl) {
+        throw new Error('TEST_BASE_URL is not set — run this suite via the vitest globalSetup that starts the server.');
+    }
     const basePath = options.basePath ?? '/';
     const rootUrl = basePath === '/' ? baseUrl : `${baseUrl}${basePath}`;
 

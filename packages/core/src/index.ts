@@ -5,8 +5,13 @@ export type MaybePromise<T> = T | Promise<T>;
 
 /** The result of a store increment operation. */
 export interface IncrementResult {
-    /** Total number of hits recorded in the current window for a given key. */
-    totalHits: number;
+    /** Raw hit count in the current window (before any algorithm weighting). */
+    currentHits: number;
+    /**
+     * Raw hit count in the previous window (before any algorithm weighting).
+     * Stores that do not track previous-window counts should return `0`.
+     */
+    previousHits: number;
     /** The time at which the current rate limit window resets. */
     resetTime: Date;
 }
@@ -19,6 +24,10 @@ export interface IncrementResult {
  * use a Redis-backed store for distributed environments.
  */
 export interface Store {
+    /** Key prefix prepended to every rate limit key in the store. */
+    prefix?: string;
+    /** Fetch a client's hit counts and reset time without incrementing. */
+    get?(key: string): MaybePromise<IncrementResult | undefined>;
     /** Increment the hit count for `key` and return the updated totals. */
     increment(key: string): MaybePromise<IncrementResult>;
     /** Decrement the hit count for `key` (e.g. to undo a counted request). */
@@ -27,6 +36,8 @@ export interface Store {
     resetKey(key: string): MaybePromise<void>;
     /** Remove all rate limit data for every key in the store. */
     resetAll(): MaybePromise<void>;
+    /** Release any resources held by the store (timers, connections, etc.). */
+    shutdown?(): MaybePromise<void>;
 }
 
 /**
@@ -69,7 +80,7 @@ export interface RateLimitOptions<TRequest = Request> {
      * {@link MemoryStore} is created automatically.
      */
     store?: Store;
-    /** The windowing algorithm. @default 'fixed-window' */
+    /** The windowing algorithm. @default 'sliding-window' */
     algorithm?: Algorithm;
     /** The IETF RateLimit header draft version to emit. @default 'draft-7' */
     headers?: HeadersVersion;
@@ -131,7 +142,7 @@ export interface RateLimitResult {
 // ── Default key generator ────────────────────────────────────────────────────
 
 /** Common proxy/CDN headers that carry the client's real IP address. */
-const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
+const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'] as const;
 
 /**
  * Default key generator that extracts the client IP from well-known proxy
@@ -174,6 +185,7 @@ function generateHeaders(
     windowSeconds: number,
     legacyHeaders: boolean,
     limited: boolean,
+    retryAfterSeconds: number,
     policyHeader?: string
 ): Record<string, string> {
     const resetSeconds = Math.max(0, Math.ceil((resetTimeMs - nowMs) / 1000));
@@ -193,7 +205,7 @@ function generateHeaders(
 
     // RFC 9110 §10.2.3 — Retry-After (delay-seconds)
     if (limited) {
-        headers['Retry-After'] = String(resetSeconds);
+        headers['Retry-After'] = String(retryAfterSeconds);
     }
 
     if (legacyHeaders) {
@@ -204,6 +216,107 @@ function generateHeaders(
 
     return headers;
 }
+
+// ── Algorithm strategies ─────────────────────────────────────────────────────
+
+/** Context passed to {@link AlgorithmStrategy} methods. */
+export interface AlgorithmContext {
+    /** Raw hit count in the current window. */
+    currentHits: number;
+    /** Raw hit count in the previous window (0 when the store doesn't track it). */
+    previousHits: number;
+    /** Unix-ms timestamp when the current rate limit window resets. */
+    resetTimeMs: number;
+    /** Current Unix-ms timestamp. */
+    nowMs: number;
+    /** Window duration in milliseconds. */
+    windowMs: number;
+    /** Maximum allowed requests per window. */
+    limit: number;
+}
+
+/**
+ * Per-algorithm strategy that encapsulates how hits are counted and when
+ * a rate-limited client may retry. Implementations are stateless — all
+ * inputs arrive via the {@link AlgorithmContext}.
+ */
+export interface AlgorithmStrategy {
+    /** Compute the effective total hits after applying any windowing logic. */
+    computeTotalHits(context: AlgorithmContext): number;
+    /** Compute the Retry-After delay (in ms) when a request is rate-limited. */
+    computeRetryAfterMs(context: AlgorithmContext): number;
+}
+
+/**
+ * Fixed-window strategy.
+ *
+ * - Total hits = current window hits (previous window is ignored).
+ * - Retry-After = time until the window resets.
+ */
+export const fixedWindowStrategy: AlgorithmStrategy = {
+    computeTotalHits({ currentHits }) {
+        return currentHits;
+    },
+    computeRetryAfterMs({ resetTimeMs, nowMs }) {
+        return Math.max(0, resetTimeMs - nowMs);
+    }
+};
+
+/**
+ * Sliding-window strategy.
+ *
+ * - Total hits = `ceil(previousHits * weight + currentHits)` where
+ *   `weight = 1 - elapsed / windowMs` decays linearly over the window.
+ * - Retry-After computes the earliest time `t` at which
+ *   `ceil(prevHits * weight(t) + currHits + 1) <= limit`, accounting for the
+ *   retry request itself incrementing the counter.
+ */
+export const slidingWindowStrategy: AlgorithmStrategy = {
+    computeTotalHits({ currentHits, previousHits, resetTimeMs, nowMs, windowMs }) {
+        if (previousHits === 0) return currentHits;
+        const windowStart = resetTimeMs - windowMs;
+        const elapsed = nowMs - windowStart;
+        const weight = Math.max(0, 1 - elapsed / windowMs);
+        return Math.ceil(previousHits * weight + currentHits);
+    },
+
+    computeRetryAfterMs({ resetTimeMs, nowMs, windowMs, limit, currentHits, previousHits }) {
+        // The retry request will add +1 hit, so we need room for currHits + 1
+        const threshold = limit - 1 - currentHits; // prevHits * weight must be <= this
+
+        // Case 1: Can we recover within the current window via previous hits decaying?
+        if (previousHits > 0 && threshold >= 0) {
+            const targetWeight = threshold / previousHits;
+            if (targetWeight >= 1) return 0; // Already recovered
+            const targetElapsed = windowMs * (1 - targetWeight);
+            const windowStart = resetTimeMs - windowMs;
+            const retryAtMs = windowStart + targetElapsed;
+            if (retryAtMs > nowMs) return retryAtMs - nowMs;
+            return 0;
+        }
+
+        // Case 2: Need to wait past resetTime for currentHits to become previous and decay.
+        // After resetTime: old prevHits are fully decayed (weight = 0), old currentHits
+        // become the new previous window. The retry adds 1 to new currentHits.
+        // Need: ceil(currentHits * newWeight + 1) <= limit
+        //       currentHits * newWeight <= limit - 1
+        if (currentHits === 0) return 0;
+
+        const targetNewWeight = (limit - 1) / currentHits;
+        if (targetNewWeight >= 1) {
+            // Recover immediately at resetTime (hits < limit right after rotation)
+            return Math.max(0, resetTimeMs - nowMs);
+        }
+
+        const targetElapsedNew = windowMs * (1 - targetNewWeight);
+        return Math.max(0, resetTimeMs + targetElapsedNew - nowMs);
+    }
+};
+
+const algorithmStrategies: Record<Algorithm, AlgorithmStrategy> = {
+    'fixed-window': fixedWindowStrategy,
+    'sliding-window': slidingWindowStrategy
+};
 
 // ── MemoryStore ──────────────────────────────────────────────────────────────
 
@@ -220,28 +333,26 @@ interface WindowEntry {
 /**
  * In-memory {@link Store} implementation backed by two rotating `Map`s.
  *
- * Supports both `fixed-window` and `sliding-window` algorithms. A background
- * interval rotates expired entries automatically. Call {@link shutdown} to
- * clear the interval when the store is no longer needed.
+ * Returns raw per-window hit counts; the algorithm strategy in
+ * {@link rateLimit} is responsible for computing weighted totals.
+ * A background interval rotates expired entries automatically.
+ * Call {@link shutdown} to clear the interval when the store is no longer needed.
  *
  * **Note:** This store is per-process — it is not shared across cluster
  * workers or server instances. Use a Redis-backed store for distributed
  * deployments.
  */
 export class MemoryStore implements Store {
+    readonly prefix?: string;
     private readonly windowMs: number;
-    private readonly algorithm: Algorithm;
     private readonly current = new Map<string, WindowEntry>();
     private readonly previous = new Map<string, WindowEntry>();
     private timer: ReturnType<typeof setInterval> | undefined;
 
-    /**
-     * @param windowMs - Duration of the rate limit window in milliseconds.
-     * @param algorithm - The windowing algorithm to use.
-     */
-    constructor(windowMs: number, algorithm: Algorithm) {
+    /** @param windowMs - Duration of the rate limit window in milliseconds. */
+    constructor(windowMs: number, prefix: string = '') {
         this.windowMs = windowMs;
-        this.algorithm = algorithm;
+        this.prefix = prefix || undefined;
 
         this.timer = setInterval(() => {
             this.cleanup();
@@ -251,6 +362,18 @@ export class MemoryStore implements Store {
         if (typeof this.timer === 'object' && 'unref' in this.timer) {
             this.timer.unref();
         }
+    }
+
+    /** @inheritdoc */
+    get(key: string): IncrementResult | undefined {
+        const now = Date.now();
+        const entry = this.current.get(key);
+        if (!entry || entry.resetTime <= now) return undefined;
+
+        const prev = this.previous.get(key);
+        const previousHits = prev && prev.resetTime > now - this.windowMs ? prev.hits : 0;
+
+        return { currentHits: entry.hits, previousHits, resetTime: entry.resetDate };
     }
 
     /** @inheritdoc */
@@ -271,16 +394,10 @@ export class MemoryStore implements Store {
 
         entry.hits++;
 
-        if (this.algorithm === 'sliding-window') {
-            const prev = this.previous.get(key);
-            const prevHits = prev && prev.resetTime > now - this.windowMs ? prev.hits : 0;
-            const elapsed = now - windowStart;
-            const weight = 1 - elapsed / this.windowMs;
-            const totalHits = Math.ceil(prevHits * weight + entry.hits);
-            return { totalHits, resetTime: entry.resetDate };
-        }
+        const prev = this.previous.get(key);
+        const previousHits = prev && prev.resetTime > now - this.windowMs ? prev.hits : 0;
 
-        return { totalHits: entry.hits, resetTime: entry.resetDate };
+        return { currentHits: entry.hits, previousHits, resetTime: entry.resetDate };
     }
 
     /** @inheritdoc */
@@ -303,7 +420,7 @@ export class MemoryStore implements Store {
         this.previous.clear();
     }
 
-    /** Stop the background cleanup interval. Call this when the store is no longer needed. */
+    /** @inheritdoc */
     shutdown(): void {
         if (this.timer) {
             clearInterval(this.timer);
@@ -332,7 +449,7 @@ export class MemoryStore implements Store {
 
 /** Check if a value is a Promise (thenable). */
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-    return typeof value === 'object' && value !== null && 'then' in value;
+    return typeof value === 'object' && value !== null && typeof (value as Record<string, unknown>)['then'] === 'function';
 }
 
 // ── rateLimit factory ────────────────────────────────────────────────────────
@@ -347,7 +464,7 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
  * synchronously — no Promises are created on the hot path.
  *
  * @param options - Configuration for the rate limiter. All fields are optional
- *   and have sensible defaults (60 requests per 60 s, fixed-window, in-memory store).
+ *   and have sensible defaults (60 requests per 60 s, sliding-window, in-memory store).
  * @returns A function `(request: Request) => RateLimitResult | Promise<RateLimitResult>`.
  *
  * @example
@@ -358,46 +475,35 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
  * ```
  */
 export function rateLimit<TRequest = Request>(
-    options: RateLimitOptions<TRequest> = {} as RateLimitOptions<TRequest>
+    options: RateLimitOptions<TRequest> = {}
 ): (request: TRequest) => RateLimitResult | Promise<RateLimitResult> {
     const windowMs = options.windowMs ?? 60_000;
     const limitOption = options.limit ?? 60;
+
+    if (windowMs <= 0) {
+        throw new RangeError(`windowMs must be a positive number, got ${String(windowMs)}`);
+    }
+    if (typeof limitOption === 'number' && limitOption < 0) {
+        throw new RangeError(`limit must be a non-negative number, got ${String(limitOption)}`);
+    }
+
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
-    const algorithm = options.algorithm ?? 'fixed-window';
+    const algorithm = options.algorithm ?? 'sliding-window';
     const headersVersion = options.headers ?? 'draft-7';
     const legacyHeaders = options.legacyHeaders ?? false;
     const passOnStoreError = options.passOnStoreError ?? false;
     const skip = options.skip;
 
-    const store = options.store ?? new MemoryStore(windowMs, algorithm);
+    const store = options.store ?? new MemoryStore(windowMs);
 
     // Pre-compute constants that are invariant across requests
     const windowSeconds = Math.ceil(windowMs / 1000);
     const staticPolicyHeader =
         typeof limitOption !== 'function' && headersVersion === 'draft-7' ? String(limitOption) + ';w=' + String(windowSeconds) : undefined;
 
-    function makeSkipResult(limit: number, now: number): RateLimitResult {
-        const resetTimeMs = now + windowMs;
-        return {
-            limited: false,
-            limit,
-            remaining: limit,
-            resetTime: new Date(resetTimeMs),
-            headers: generateHeaders(
-                headersVersion,
-                limit,
-                limit,
-                resetTimeMs,
-                now,
-                windowSeconds,
-                legacyHeaders,
-                false,
-                staticPolicyHeader
-            )
-        };
-    }
+    const strategy = algorithmStrategies[algorithm];
 
-    function makePassResult(limit: number, now: number): RateLimitResult {
+    function makeBypassResult(limit: number, now: number): RateLimitResult {
         const resetTimeMs = now + windowMs;
         return {
             limited: false,
@@ -413,15 +519,32 @@ export function rateLimit<TRequest = Request>(
                 windowSeconds,
                 legacyHeaders,
                 false,
+                0,
                 staticPolicyHeader
             )
         };
     }
 
     function buildResult(incrementResult: IncrementResult, limit: number, now: number): RateLimitResult {
-        const remaining = limit - incrementResult.totalHits;
-        const limited = remaining < 0;
         const resetTimeMs = incrementResult.resetTime.getTime();
+        const context: AlgorithmContext = {
+            currentHits: incrementResult.currentHits,
+            previousHits: incrementResult.previousHits,
+            resetTimeMs,
+            nowMs: now,
+            windowMs,
+            limit
+        };
+
+        const totalHits = strategy.computeTotalHits(context);
+        const remaining = limit - totalHits;
+        const limited = remaining < 0;
+
+        let retryAfterSeconds = 0;
+        if (limited) {
+            retryAfterSeconds = Math.max(0, Math.ceil(strategy.computeRetryAfterMs(context) / 1000));
+        }
+
         const headers = generateHeaders(
             headersVersion,
             limit,
@@ -431,6 +554,7 @@ export function rateLimit<TRequest = Request>(
             windowSeconds,
             legacyHeaders,
             limited,
+            retryAfterSeconds,
             staticPolicyHeader
         );
         return { limited, limit, remaining: Math.max(0, remaining), resetTime: incrementResult.resetTime, headers };
@@ -445,14 +569,14 @@ export function rateLimit<TRequest = Request>(
                 return incrementResult.then(
                     r => buildResult(r, limit, now),
                     () => {
-                        if (passOnStoreError) return makePassResult(limit, now);
+                        if (passOnStoreError) return makeBypassResult(limit, now);
                         throw new Error('Rate limit store error');
                     }
                 );
             }
             return buildResult(incrementResult, limit, now);
         } catch {
-            if (passOnStoreError) return makePassResult(limit, now);
+            if (passOnStoreError) return makeBypassResult(limit, now);
             throw new Error('Rate limit store error');
         }
     }
@@ -465,7 +589,7 @@ export function rateLimit<TRequest = Request>(
             const shouldSkip = await skip(request);
             if (shouldSkip) {
                 const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
-                return makeSkipResult(limit, now);
+                return makeBypassResult(limit, now);
             }
         }
 

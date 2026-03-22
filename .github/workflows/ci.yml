@@ -59,9 +59,31 @@ jobs:
             - run: pnpm build
             - run: pnpm test:examples
 
-    test-bun:
-        name: Test (Bun)
+    test-redis-integration:
+        name: Redis Integration Tests
         runs-on: ubuntu-latest
+        needs: test
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 24
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm build
+            - run: pnpm --filter @universal-rate-limit/redis run test:integration
+
+    test-integration:
+        name: Integration · ${{ matrix.runtime }}
+        runs-on: ubuntu-latest
+        needs: test
+        strategy:
+            fail-fast: false
+            matrix:
+                # node: cross-runtime integration tests (distinct from unit tests above)
+                # bun/deno: verify compatibility on non-Node runtimes
+                runtime: [node, bun, deno]
         steps:
             - uses: actions/checkout@v6
             - uses: pnpm/action-setup@v4
@@ -70,23 +92,11 @@ jobs:
                   node-version: 24
                   cache: pnpm
             - uses: oven-sh/setup-bun@v2
-            - run: pnpm install --frozen-lockfile
-            - run: pnpm build
-            - run: bun test tests/bun/
-
-    test-deno:
-        name: Test (Deno)
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v6
-              with:
-                  node-version: 24
-                  cache: pnpm
+              if: matrix.runtime == 'bun'
             - uses: denoland/setup-deno@v2
+              if: matrix.runtime == 'deno'
               with:
                   deno-version: v2.x
             - run: pnpm install --frozen-lockfile
             - run: pnpm build
-            - run: deno test --allow-net tests/deno/
+            - run: pnpm --filter universal-rate-limit run test:integration:${{ matrix.runtime }}

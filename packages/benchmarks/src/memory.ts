@@ -51,7 +51,7 @@ function benchUniversalMemory(): MemoryResult {
     forceGC();
     const before = process.memoryUsage().heapUsed;
 
-    const store = new UniversalMemoryStore(WINDOW_MS, 'fixed-window');
+    const store = new UniversalMemoryStore(WINDOW_MS);
     for (let i = 0; i < KEY_COUNT; i++) {
         store.increment(`key-${String(i)}`);
     }

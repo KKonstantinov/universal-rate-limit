@@ -9,6 +9,9 @@ hero:
           text: Get Started
           link: /getting-started
         - theme: alt
+          text: Playground ↗
+          link: https://universal-rate-limit-playground.vercel.app
+        - theme: alt
           text: API Reference
           link: /api
         - theme: alt

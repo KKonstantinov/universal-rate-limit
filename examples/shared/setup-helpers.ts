@@ -8,7 +8,7 @@ export async function waitForServer(baseUrl: string, timeoutMs = 10_000) {
         if (Date.now() - start > timeoutMs) throw new Error('Server did not start');
         try {
             const res = await fetch(baseUrl);
-            if (res.ok) break;
+            if (res.status < 500) break;
         } catch {
             // not ready
         }

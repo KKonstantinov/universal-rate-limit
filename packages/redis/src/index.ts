@@ -1,5 +1,5 @@
 import type { Store, IncrementResult } from 'universal-rate-limit';
-import { INCREMENT_SCRIPT } from './scripts.js';
+import { GET_SCRIPT, INCREMENT_SCRIPT } from './scripts.js';
 
 // ── Re-exports from core ────────────────────────────────────────────────────
 
@@ -41,14 +41,37 @@ export interface RedisStoreOptions {
 
 /**
  * Parse the two-element `[totalHits, timeToExpire]` array returned by the
- * Redis Lua scripts into a typed result object.
+ * Redis Lua scripts into a typed {@link IncrementResult}.
+ *
+ * Redis stores use a single counter per key, so `currentHits` is the total
+ * and `previousHits` is always `0`. The algorithm strategy in the core
+ * library handles any windowing logic on top of these raw values.
  */
-function parseScriptResult(reply: RedisReply, windowMs: number): { totalHits: number; resetTime: Date } {
-    const arr = reply as [number, number];
-    const totalHits = arr[0];
-    const timeToExpire = arr[1];
+function parseScriptResult(reply: RedisReply, windowMs: number): IncrementResult {
+    if (!Array.isArray(reply) || reply.length < 2) {
+        throw new Error(`Unexpected Redis script reply: ${String(reply)}`);
+    }
+    const currentHits = Number(reply[0]);
+    const timeToExpire = Number(reply[1]);
+    if (!Number.isFinite(currentHits) || !Number.isFinite(timeToExpire)) {
+        throw new TypeError(`Non-numeric values in Redis script reply: ${String(reply)}`);
+    }
     const resetTime = new Date(Date.now() + (timeToExpire > 0 ? timeToExpire : windowMs));
-    return { totalHits, resetTime };
+    return { currentHits, previousHits: 0, resetTime };
+}
+
+function parseGetResult(reply: RedisReply, windowMs: number): IncrementResult | null {
+    if (!Array.isArray(reply) || reply.length < 2) {
+        throw new Error(`Unexpected Redis GET script reply: ${String(reply)}`);
+    }
+    const currentHits = Number(reply[0]);
+    const ttl = Number(reply[1]);
+    if (currentHits === -1) return null;
+    if (!Number.isFinite(currentHits) || !Number.isFinite(ttl)) {
+        throw new TypeError(`Non-numeric values in Redis GET script reply: ${String(reply)}`);
+    }
+    const resetTime = new Date(Date.now() + (ttl > 0 ? ttl : windowMs));
+    return { currentHits, previousHits: 0, resetTime };
 }
 
 // ── RedisStore ──────────────────────────────────────────────────────────────
@@ -78,10 +101,11 @@ function parseScriptResult(reply: RedisReply, windowMs: number): { totalHits: nu
 export class RedisStore implements Store {
     private readonly sendCommand: SendCommandFn;
     private readonly windowMs: number;
-    private readonly prefix: string;
+    readonly prefix: string;
     private readonly resetExpiryOnChange: boolean;
 
     private incrementShaPromise: Promise<string> | undefined;
+    private getShaPromise: Promise<string> | undefined;
 
     /** @param options - Redis store configuration. */
     constructor(options: RedisStoreOptions) {
@@ -91,6 +115,25 @@ export class RedisStore implements Store {
         this.resetExpiryOnChange = options.resetExpiryOnChange ?? false;
     }
 
+    /** Fetch the current hit count and TTL for `key` without incrementing. */
+    async get(key: string): Promise<IncrementResult | undefined> {
+        const fullKey = this.prefix + key;
+        this.getShaPromise ??= this.loadScript(GET_SCRIPT);
+
+        try {
+            const sha = await this.getShaPromise;
+            const reply = await this.sendCommand('EVALSHA', sha, '1', fullKey);
+            return parseGetResult(reply, this.windowMs) ?? undefined;
+        } catch (error: unknown) {
+            if (isNoscriptError(error)) {
+                const reply = await this.sendCommand('EVAL', GET_SCRIPT, '1', fullKey);
+                this.getShaPromise = this.loadScript(GET_SCRIPT);
+                return parseGetResult(reply, this.windowMs) ?? undefined;
+            }
+            throw error;
+        }
+    }
+
     /**
      * Atomically increment the hit counter for `key` using a Lua script.
      * If the key does not exist, it is created with a TTL of {@link RedisStoreOptions.windowMs}.
@@ -98,8 +141,6 @@ export class RedisStore implements Store {
     async increment(key: string): Promise<IncrementResult> {
         const fullKey = this.prefix + key;
         const args = [fullKey, String(this.windowMs), this.resetExpiryOnChange ? '1' : '0'];
-
-        // Lazy-load the Lua script on first call
         this.incrementShaPromise ??= this.loadScript(INCREMENT_SCRIPT);
 
         try {
@@ -108,10 +149,8 @@ export class RedisStore implements Store {
             return parseScriptResult(reply, this.windowMs);
         } catch (error: unknown) {
             if (isNoscriptError(error)) {
-                // Script was evicted from cache — reload and retry once
+                const reply = await this.sendCommand('EVAL', INCREMENT_SCRIPT, '1', ...args);
                 this.incrementShaPromise = this.loadScript(INCREMENT_SCRIPT);
-                const sha = await this.incrementShaPromise;
-                const reply = await this.sendCommand('EVALSHA', sha, '1', ...args);
                 return parseScriptResult(reply, this.windowMs);
             }
             throw error;
@@ -132,9 +171,12 @@ export class RedisStore implements Store {
     async resetAll(): Promise<void> {
         let cursor = '0';
         do {
-            const reply = (await this.sendCommand('SCAN', cursor, 'MATCH', this.prefix + '*', 'COUNT', '100')) as [string, string[]];
-            cursor = reply[0];
-            const keys = reply[1];
+            const reply = await this.sendCommand('SCAN', cursor, 'MATCH', this.prefix + '*', 'COUNT', '100');
+            if (!Array.isArray(reply) || reply.length < 2 || !Array.isArray(reply[1])) {
+                throw new Error(`Unexpected SCAN reply: ${String(reply)}`);
+            }
+            const [nextCursor, keys] = reply as [string, string[]];
+            cursor = nextCursor;
             if (keys.length > 0) {
                 await this.sendCommand('DEL', ...keys);
             }
