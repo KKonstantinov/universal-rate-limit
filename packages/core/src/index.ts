@@ -80,7 +80,7 @@ export interface RateLimitOptions<TRequest = Request> {
      * {@link MemoryStore} is created automatically.
      */
     store?: Store;
-    /** The windowing algorithm. @default 'fixed-window' */
+    /** The windowing algorithm. @default 'sliding-window' */
     algorithm?: Algorithm;
     /** The IETF RateLimit header draft version to emit. @default 'draft-7' */
     headers?: HeadersVersion;
@@ -464,7 +464,7 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
  * synchronously — no Promises are created on the hot path.
  *
  * @param options - Configuration for the rate limiter. All fields are optional
- *   and have sensible defaults (60 requests per 60 s, fixed-window, in-memory store).
+ *   and have sensible defaults (60 requests per 60 s, sliding-window, in-memory store).
  * @returns A function `(request: Request) => RateLimitResult | Promise<RateLimitResult>`.
  *
  * @example
@@ -480,7 +480,7 @@ export function rateLimit<TRequest = Request>(
     const windowMs = options.windowMs ?? 60_000;
     const limitOption = options.limit ?? 60;
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
-    const algorithm = options.algorithm ?? 'fixed-window';
+    const algorithm = options.algorithm ?? 'sliding-window';
     const headersVersion = options.headers ?? 'draft-7';
     const legacyHeaders = options.legacyHeaders ?? false;
     const passOnStoreError = options.passOnStoreError ?? false;

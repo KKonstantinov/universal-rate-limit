@@ -210,6 +210,50 @@ describe('HTTP server integration', () => {
         expect(r3.status).toBe(200);
     });
 
+    it('sliding-window sends correct headers and blocks after decay', async () => {
+        const limiter = rateLimit({ limit: 3, windowMs: 60_000, algorithm: 'sliding-window' });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                const response = await buildRateLimitResponse(webReq, result, {});
+                res.writeHead(response.status, Object.fromEntries(response.headers));
+                res.end(await response.text());
+            } else {
+                for (const [key, value] of Object.entries(result.headers)) {
+                    res.setHeader(key, value);
+                }
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // First request — check headers
+        const r1 = await fetch(url, ip);
+        expect(r1.status).toBe(200);
+        expect(r1.headers.get('ratelimit')).toMatch(/limit=3, remaining=2, reset=\d+/);
+        expect(r1.headers.get('ratelimit-policy')).toBe('3;w=60');
+
+        // Fill remaining quota
+        const r2 = await fetch(url, ip);
+        expect(r2.status).toBe(200);
+        expect(r2.headers.get('ratelimit')).toMatch(/remaining=1/);
+
+        const r3 = await fetch(url, ip);
+        expect(r3.status).toBe(200);
+        expect(r3.headers.get('ratelimit')).toMatch(/remaining=0/);
+
+        // Over limit — should get 429 with Retry-After
+        const r4 = await fetch(url, ip);
+        expect(r4.status).toBe(429);
+        expect(r4.headers.get('retry-after')).toBeTruthy();
+    });
+
     it('supports custom keyGenerator with x-api-key header', async () => {
         const limiter = rateLimit({
             limit: 1,

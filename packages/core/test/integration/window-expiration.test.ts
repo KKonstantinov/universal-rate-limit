@@ -54,6 +54,19 @@ async function waitForSafeWindowPosition(windowMs: number): Promise<void> {
     }
 }
 
+/**
+ * Wait until we're within `bufferMs` of the next clock-aligned window boundary.
+ * Use this when you want to fire requests right before a window rolls over,
+ * so that a short subsequent sleep lands you just inside the next window.
+ */
+async function waitForWindowEnd(windowMs: number, bufferMs = 50): Promise<void> {
+    const position = Date.now() % windowMs;
+    const timeUntilEnd = windowMs - position;
+    if (timeUntilEnd > bufferMs) {
+        await sleep(timeUntilEnd - bufferMs);
+    }
+}
+
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('Window expiration (real timers)', () => {
@@ -68,7 +81,7 @@ describe('Window expiration (real timers)', () => {
 
     it('window resets after expiry', async () => {
         const windowMs = 500;
-        const limiter = rateLimit({ limit: 1, windowMs });
+        const limiter = rateLimit({ limit: 1, windowMs, algorithm: 'fixed-window' });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -172,10 +185,85 @@ describe('Window expiration (real timers)', () => {
         expect(r.status).toBe(200);
     });
 
+    it('sliding-window blocks shortly after window boundary', async () => {
+        const windowMs = 2000;
+        const limiter = rateLimit({ limit: 3, windowMs, algorithm: 'sliding-window' });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                res.writeHead(429);
+                res.end('Limited');
+            } else {
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Wait until near the end of a window so the subsequent short sleep
+        // lands us just inside the next window with a high previous-window weight.
+        await waitForWindowEnd(windowMs, 100);
+
+        // Fill all 3 allowed requests (fired in the last ~100ms of the window)
+        for (let i = 0; i < 3; i++) {
+            const r = await fetch(url, ip);
+            expect(r.status).toBe(200);
+        }
+
+        // Sleep just past the boundary — at most ~200ms into the new window.
+        // weight = 1 - (≤200/2000) ≥ 0.9; ceil(3 * 0.9 + 1) = 4 > 3 → still blocked.
+        await sleep(150);
+
+        // Previous hits weighted heavily → still blocked
+        const r = await fetch(url, ip);
+        expect(r.status).toBe(429);
+    });
+
+    it('sliding-window unblocks after sufficient decay', async () => {
+        const windowMs = 2000;
+        const limiter = rateLimit({ limit: 3, windowMs, algorithm: 'sliding-window' });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                res.writeHead(429);
+                res.end('Limited');
+            } else {
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        await waitForSafeWindowPosition(windowMs);
+
+        // Fill all 3 allowed requests
+        for (let i = 0; i < 3; i++) {
+            const r = await fetch(url, ip);
+            expect(r.status).toBe(200);
+        }
+
+        // Wait well into the next window so weight decays enough
+        // At 75% through window 2: weight = 0.25, ceil(3 * 0.25 + 1) = ceil(1.75) = 2 ≤ 3
+        await sleep(windowMs + Math.floor(windowMs * 0.75));
+
+        const r = await fetch(url, ip);
+        expect(r.status).toBe(200);
+    });
+
     it('MemoryStore cleanup runs on schedule', async () => {
         const store = new MemoryStore(500);
         try {
-            const limiter = rateLimit({ limit: 1, windowMs: 500, store });
+            const limiter = rateLimit({ limit: 1, windowMs: 500, store, algorithm: 'fixed-window' });
 
             const req = new Request('http://localhost/', {
                 headers: { 'x-forwarded-for': '10.0.0.1' }

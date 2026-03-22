@@ -53,7 +53,7 @@ describe('rateLimit', () => {
         it('resets after window expires', async () => {
             vi.useFakeTimers();
             try {
-                const limiter = rateLimit({ limit: 1, windowMs: 1000 });
+                const limiter = rateLimit({ limit: 1, windowMs: 1000, algorithm: 'fixed-window' });
                 const req = createRequest();
 
                 const r1 = await limiter(req);
@@ -91,6 +91,209 @@ describe('rateLimit', () => {
                 // Weighted count = 8 * 0.5 + 1 = 5 (not limited since < 10)
                 const result = await limiter(req);
                 expect(result.limited).toBe(false);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('blocks when weighted count exceeds limit', async () => {
+            vi.useFakeTimers();
+            try {
+                // Align to a clean second boundary for deterministic window alignment
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill exactly at the limit in window 1
+                for (let i = 0; i < 10; i++) {
+                    const r = await limiter(req);
+                    expect(r.limited).toBe(false);
+                }
+
+                // Advance just past the window boundary (1ms into window 2)
+                // Previous weight ≈ 0.999, totalHits = ceil(10 * 0.999 + 1) = 11 > 10
+                vi.advanceTimersByTime(1001);
+                const result = await limiter(req);
+                expect(result.limited).toBe(true);
+                expect(result.remaining).toBe(0);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('weight decays over time reducing previous window impact', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 100, windowMs: 1000, algorithm: 'sliding-window' });
+
+                // Fill 10 hits for 3 different IPs in window 1
+                const ip1 = createRequest('10.0.0.1');
+                const ip2 = createRequest('10.0.0.2');
+                const ip3 = createRequest('10.0.0.3');
+                for (let i = 0; i < 10; i++) {
+                    await limiter(ip1);
+                    await limiter(ip2);
+                    await limiter(ip3);
+                }
+
+                // 25% into window 2: weight = 0.75
+                // totalHits = ceil(10 * 0.75 + 1) = ceil(8.5) = 9, remaining = 91
+                vi.advanceTimersByTime(1250);
+                const r25 = await limiter(ip1);
+                expect(r25.remaining).toBe(91);
+
+                // 50% into window 2: weight = 0.5
+                // totalHits = ceil(10 * 0.5 + 1) = ceil(6) = 6, remaining = 94
+                vi.advanceTimersByTime(250);
+                const r50 = await limiter(ip2);
+                expect(r50.remaining).toBe(94);
+
+                // 75% into window 2: weight = 0.25
+                // totalHits = ceil(10 * 0.25 + 1) = ceil(3.5) = 4, remaining = 96
+                vi.advanceTimersByTime(250);
+                const r75 = await limiter(ip3);
+                expect(r75.remaining).toBe(96);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('previous hits fully expire after two windows', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill window 1 completely
+                for (let i = 0; i < 10; i++) {
+                    await limiter(req);
+                }
+
+                // Advance past two full windows — previous hits are too old to count
+                vi.advanceTimersByTime(2001);
+                const result = await limiter(req);
+                expect(result.limited).toBe(false);
+                expect(result.remaining).toBe(9);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('remaining reflects weighted calculation across requests', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill 5 hits in window 1
+                for (let i = 0; i < 5; i++) {
+                    await limiter(req);
+                }
+
+                // Advance to 50% through window 2
+                vi.advanceTimersByTime(1500);
+
+                // Request 1: totalHits = ceil(5 * 0.5 + 1) = ceil(3.5) = 4, remaining = 6
+                const r1 = await limiter(req);
+                expect(r1.remaining).toBe(6);
+
+                // Request 2: totalHits = ceil(5 * 0.5 + 2) = ceil(4.5) = 5, remaining = 5
+                const r2 = await limiter(req);
+                expect(r2.remaining).toBe(5);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('headers reflect weighted remaining under sliding-window', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 60_000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill 5 hits in window 1
+                for (let i = 0; i < 5; i++) {
+                    await limiter(req);
+                }
+
+                // Advance to 50% through window 2 (90s = 1.5 windows)
+                vi.advanceTimersByTime(90_000);
+
+                // weight = 0.5, totalHits = ceil(5 * 0.5 + 1) = 4, remaining = 6
+                const result = await limiter(req);
+                expect(result.headers['RateLimit']).toMatch(/limit=10, remaining=6, reset=\d+/);
+                expect(result.headers['RateLimit-Policy']).toBe('10;w=60');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('includes Retry-After when limited under sliding-window', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill limit in window 1
+                for (let i = 0; i < 10; i++) {
+                    await limiter(req);
+                }
+
+                // Advance just into window 2
+                vi.advanceTimersByTime(1001);
+                const result = await limiter(req);
+                expect(result.limited).toBe(true);
+                expect(result.headers).toHaveProperty('Retry-After');
+                expect(Number(result.headers['Retry-After'])).toBeGreaterThan(0);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('resetTime aligns to window boundary', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                const result = await limiter(req);
+                // resetTime should be at the end of the current aligned window
+                expect(result.resetTime.getTime()).toBe(new Date('2025-01-01T00:00:01.000Z').getTime());
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('transitions from limited to allowed as weight decays', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
+                const limiter = rateLimit({ limit: 10, windowMs: 1000, algorithm: 'sliding-window' });
+                const req = createRequest();
+
+                // Fill exactly at limit
+                for (let i = 0; i < 10; i++) {
+                    await limiter(req);
+                }
+
+                // 50ms into window 2: weight = 0.95
+                // ceil(10 * 0.95 + 1) = ceil(10.5) = 11 → limited
+                vi.advanceTimersByTime(1050);
+                const r1 = await limiter(req);
+                expect(r1.limited).toBe(true);
+
+                // 249ms into window 2 (199ms more): weight = 0.751
+                // currentHits = 2 (r1 + this), ceil(10 * 0.751 + 2) = ceil(9.51) = 10 → not limited
+                vi.advanceTimersByTime(199);
+                const r2 = await limiter(req);
+                expect(r2.limited).toBe(false);
+                expect(r2.remaining).toBe(0);
             } finally {
                 vi.useRealTimers();
             }
