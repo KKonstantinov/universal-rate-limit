@@ -44,7 +44,13 @@ export function Playground() {
 
             {/* Status Dashboard */}
             <div className="mb-4">
-                <StatusDashboard latestEntry={latestEntry} windowMs={config.windowMs} algorithm={config.algorithm} />
+                <StatusDashboard
+                    latestEntry={latestEntry}
+                    windowMs={config.windowMs}
+                    algorithm={config.algorithm}
+                    refillRate={config.refillRate}
+                    refillMs={config.refillMs}
+                />
             </div>
 
             {/* Action Bar */}

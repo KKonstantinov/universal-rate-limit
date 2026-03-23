@@ -233,6 +233,46 @@ describe('RedisStore integration', () => {
             expect(limited.retryAfterMs).toBeLessThanOrEqual(200);
         });
 
+        it('wait retryAfterMs then unblocked', async () => {
+            // refillRate=2 means 2 tokens/sec; limit=2
+            const fastAlgo = tokenBucket({ refillRate: 2 });
+            const store = createStore();
+
+            // Exhaust both tokens
+            await store.consume('key', fastAlgo, 2);
+            await store.consume('key', fastAlgo, 2);
+
+            const limited = await store.consume('key', fastAlgo, 2);
+            expect(limited.limited).toBe(true);
+            expect(limited.retryAfterMs).toBeGreaterThan(0);
+
+            // Wait the retryAfterMs + margin
+            await new Promise(resolve => setTimeout(resolve, limited.retryAfterMs + 200));
+
+            const result = await store.consume('key', fastAlgo, 2);
+            expect(result.limited).toBe(false);
+        });
+
+        it('mid-refill remains limited', async () => {
+            // refillRate=1 means 1 token/sec; limit=5
+            const slowAlgo = tokenBucket({ refillRate: 1 });
+            const store = createStore();
+
+            // Exhaust all 5 tokens
+            for (let i = 0; i < 5; i++) {
+                await store.consume('key', slowAlgo, 5);
+            }
+
+            const limited = await store.consume('key', slowAlgo, 5);
+            expect(limited.limited).toBe(true);
+
+            // Wait 200ms — only 0.2 tokens at 1 token/sec, not enough
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            const stillLimited = await store.consume('key', slowAlgo, 5);
+            expect(stillLimited.limited).toBe(true);
+        });
+
         it('non-default refillMs slows refill rate', async () => {
             // refillRate=10, refillMs=30_000 → tokensPerMs = 10/30000 ≈ 0.000333
             // 500ms wait → refilled = 500 * 0.000333 ≈ 0.167 tokens (not enough for 1 request)
@@ -467,6 +507,87 @@ describe('RedisStore integration', () => {
             const rB = await limiter(reqB);
             expect(rB.limited).toBe(false);
             expect(rB.remaining).toBe(1);
+        });
+
+        it('fixed-window Retry-After: wait then unblocked', async () => {
+            const store = createStore();
+            const limiter = rateLimit({
+                limit: 2,
+                algorithm: { type: 'fixed-window', windowMs: 2000 },
+                store,
+                headers: 'draft-7'
+            });
+
+            const request = new Request('http://localhost/', {
+                headers: { 'x-forwarded-for': '10.0.0.50' }
+            });
+
+            await limiter(request);
+            await limiter(request);
+
+            const blocked = await limiter(request);
+            expect(blocked.limited).toBe(true);
+            const retryAfterSeconds = Number(blocked.headers['Retry-After']);
+            expect(retryAfterSeconds).toBeGreaterThan(0);
+
+            await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000 + 200));
+
+            const unblocked = await limiter(request);
+            expect(unblocked.limited).toBe(false);
+        });
+
+        it('sliding-window Retry-After: wait then unblocked', async () => {
+            const store = createStore();
+            const limiter = rateLimit({
+                limit: 2,
+                algorithm: { type: 'sliding-window', windowMs: 2000 },
+                store,
+                headers: 'draft-7'
+            });
+
+            const request = new Request('http://localhost/', {
+                headers: { 'x-forwarded-for': '10.0.0.51' }
+            });
+
+            await limiter(request);
+            await limiter(request);
+
+            const blocked = await limiter(request);
+            expect(blocked.limited).toBe(true);
+            const retryAfterSeconds = Number(blocked.headers['Retry-After']);
+            expect(retryAfterSeconds).toBeGreaterThan(0);
+
+            await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000 + 200));
+
+            const unblocked = await limiter(request);
+            expect(unblocked.limited).toBe(false);
+        });
+
+        it('token-bucket Retry-After: wait then unblocked', async () => {
+            const store = createStore();
+            const limiter = rateLimit({
+                limit: 2,
+                algorithm: { type: 'token-bucket', refillRate: 2 },
+                store,
+                headers: 'draft-7'
+            });
+
+            const request = new Request('http://localhost/', {
+                headers: { 'x-forwarded-for': '10.0.0.52' }
+            });
+
+            await limiter(request);
+            await limiter(request);
+
+            const blocked = await limiter(request);
+            expect(blocked.limited).toBe(true);
+            const retryAfterSeconds = Number(blocked.headers['Retry-After']);
+            expect(retryAfterSeconds).toBeGreaterThan(0);
+
+            await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000 + 200));
+
+            const unblocked = await limiter(request);
+            expect(unblocked.limited).toBe(false);
         });
 
         it('generates correct headers with token-bucket', async () => {

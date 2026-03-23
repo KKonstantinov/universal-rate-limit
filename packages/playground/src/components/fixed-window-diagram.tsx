@@ -1,50 +1,54 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getWindowIndex, getWindowElapsedFraction } from '../lib/window-utils';
 
 interface FixedWindowDiagramProps {
     windowMs: number;
     hits: number;
     limit: number;
+    resetTime: string | null;
 }
 
-export function FixedWindowDiagram({ windowMs, hits, limit }: FixedWindowDiagramProps) {
-    const [elapsed, setElapsed] = useState(() => getWindowElapsedFraction(windowMs));
+export function FixedWindowDiagram({ windowMs, hits, limit, resetTime }: FixedWindowDiagramProps) {
+    const [elapsed, setElapsed] = useState(0);
     const [flash, setFlash] = useState(false);
-    const prevIndexRef = useRef(getWindowIndex(windowMs));
     const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     useEffect(() => {
-        setElapsed(getWindowElapsedFraction(windowMs));
-        prevIndexRef.current = getWindowIndex(windowMs);
-    }, [windowMs]);
+        if (!resetTime) {
+            setElapsed(0);
+            return;
+        }
 
-    useEffect(() => {
+        const resetMs = new Date(resetTime).getTime();
+        const windowStartMs = resetMs - windowMs;
+
         const updateElapsed = () => {
-            setElapsed(getWindowElapsedFraction(windowMs));
+            const fraction = (Date.now() - windowStartMs) / windowMs;
+            setElapsed(Math.min(1, Math.max(0, fraction)));
         };
         updateElapsed();
 
         const progressInterval = setInterval(updateElapsed, 250);
 
-        const now = Date.now();
-        const nextBoundary = (Math.floor(now / windowMs) + 1) * windowMs;
-        const boundaryTimeout = setTimeout(() => {
-            prevIndexRef.current = getWindowIndex(windowMs);
-            setFlash(true);
-            clearTimeout(flashTimeoutRef.current);
-            flashTimeoutRef.current = setTimeout(() => {
-                setFlash(false);
-            }, 800);
-        }, nextBoundary - now);
+        const delay = resetMs - Date.now();
+        let boundaryTimeout: ReturnType<typeof setTimeout> | undefined;
+        if (delay > 0) {
+            boundaryTimeout = setTimeout(() => {
+                setFlash(true);
+                clearTimeout(flashTimeoutRef.current);
+                flashTimeoutRef.current = setTimeout(() => {
+                    setFlash(false);
+                }, 800);
+            }, delay);
+        }
 
         return () => {
             clearInterval(progressInterval);
             clearTimeout(boundaryTimeout);
             clearTimeout(flashTimeoutRef.current);
         };
-    }, [windowMs]);
+    }, [resetTime, windowMs]);
 
     const limited = hits >= limit;
 
@@ -52,7 +56,7 @@ export function FixedWindowDiagram({ windowMs, hits, limit }: FixedWindowDiagram
         <div className="space-y-1.5">
             {/* Label */}
             <div className="flex items-center justify-between text-[10px] font-medium text-emerald-600/70 dark:text-emerald-400/70">
-                <span>Current Epoch Window</span>
+                <span>Current Window</span>
                 <span className="tabular-nums text-gray-500 dark:text-gray-400">
                     {String(hits)} / {String(limit)} hits
                 </span>

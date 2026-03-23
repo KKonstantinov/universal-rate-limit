@@ -4,17 +4,19 @@ import { useState, useEffect } from 'react';
 import type { AlgorithmName, RequestLogEntry } from '../lib/types';
 import { computeSlidingWeight } from '../lib/window-utils';
 import { CountdownTimer } from './countdown-timer';
-import { EpochWindowTimer } from './epoch-window-timer';
 import { FixedWindowDiagram } from './fixed-window-diagram';
 import { RecoveryTimer } from './recovery-timer';
 import { RetryAfterTimer } from './retry-after-timer';
 import { SlidingWindowDiagram } from './sliding-window-diagram';
 import { StatusBadge } from './status-badge';
+import { TokenBucketDiagram } from './token-bucket-diagram';
 
 interface StatusDashboardProps {
     latestEntry: RequestLogEntry | null;
     windowMs: number;
     algorithm: AlgorithmName;
+    refillRate?: number;
+    refillMs?: number;
 }
 
 /**
@@ -43,7 +45,7 @@ function interpolateRemaining(entry: RequestLogEntry, windowMs: number): number 
     return Math.max(0, Math.min(entry.limit, entry.limit - decayingHits));
 }
 
-export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDashboardProps) {
+export function StatusDashboard({ latestEntry, windowMs, algorithm, refillRate, refillMs }: StatusDashboardProps) {
     const [interpolatedRemaining, setInterpolatedRemaining] = useState<number | null>(null);
     const [windowExpired, setWindowExpired] = useState(false);
 
@@ -70,6 +72,40 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
             clearInterval(interval);
         };
     }, [latestEntry, windowMs, algorithm]);
+
+    // Token bucket: show raw server value on consume (jumps down), interpolate refill between requests
+    const [tokenBucketRemaining, setTokenBucketRemaining] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!latestEntry || algorithm !== 'token-bucket') {
+            setTokenBucketRemaining(null);
+            return;
+        }
+
+        const rate = refillRate ?? 1;
+        const periodMs = refillMs ?? 1000;
+        const tokensPerMs = rate / periodMs;
+        const capacity = latestEntry.limit;
+        const entryRemaining = latestEntry.remaining;
+
+        // Show the server value immediately (jump down on consume)
+        setTokenBucketRemaining(entryRemaining);
+
+        // Only interpolate refill if not already at capacity
+        if (entryRemaining >= capacity) return;
+
+        const entryTimestamp = latestEntry.timestamp;
+
+        const interval = setInterval(() => {
+            const elapsedMs = Date.now() - entryTimestamp;
+            const refilled = entryRemaining + elapsedMs * tokensPerMs;
+            setTokenBucketRemaining(Math.min(capacity, Math.floor(refilled)));
+        }, 1000);
+
+        return () => {
+            clearInterval(interval);
+        };
+    }, [latestEntry, algorithm, refillRate, refillMs]);
 
     // Fixed window: detect when resetTime passes and reset the display
     useEffect(() => {
@@ -99,8 +135,16 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
     const limit = latestEntry?.limit ?? 0;
     const resetTime = latestEntry?.resetTime ?? null;
 
-    const remaining = interpolatedRemaining ?? (windowExpired ? limit : (latestEntry?.remaining ?? 0));
-    const limited = interpolatedRemaining === null ? (windowExpired ? false : (latestEntry?.limited ?? false)) : remaining <= 0;
+    const remaining = tokenBucketRemaining ?? interpolatedRemaining ?? (windowExpired ? limit : (latestEntry?.remaining ?? 0));
+    const displayRemaining = remaining;
+    const limited =
+        tokenBucketRemaining === null
+            ? interpolatedRemaining === null
+                ? windowExpired
+                    ? false
+                    : (latestEntry?.limited ?? false)
+                : remaining <= 0
+            : remaining <= 0;
 
     const ratio = limit > 0 ? remaining / limit : 1;
     const barColor = limited ? 'bg-red-500' : ratio > 0.5 ? 'bg-green-500' : ratio > 0.2 ? 'bg-yellow-500' : 'bg-red-500';
@@ -113,7 +157,7 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                     <div className="mb-1 flex items-baseline justify-between">
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Remaining</span>
                         <span className="text-sm tabular-nums font-semibold">
-                            {latestEntry ? `${String(remaining)} / ${String(limit)}` : '-- / --'}
+                            {latestEntry ? `${String(displayRemaining)} / ${String(limit)}` : '-- / --'}
                         </span>
                     </div>
                     <div className="h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
@@ -127,7 +171,15 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                 {/* Countdown / Recovery / Retry After */}
                 <div className="text-center min-w-24">
                     <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {algorithm === 'sliding-window' ? (limited ? 'Retry After' : 'Full Recovery') : 'Window Reset'}
+                        {algorithm === 'sliding-window'
+                            ? limited
+                                ? 'Retry After'
+                                : 'Full Recovery'
+                            : algorithm === 'token-bucket'
+                              ? limited
+                                  ? 'Retry After'
+                                  : 'Full Refill'
+                              : 'Window Reset'}
                         <span className="relative ml-1 inline-flex group">
                             <span className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-gray-400 text-[10px] leading-none text-gray-400 dark:border-gray-500 dark:text-gray-500">
                                 ?
@@ -137,7 +189,11 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                                     ? limited
                                         ? 'Time until the server will accept requests again, based on the Retry-After response header.'
                                         : 'Time until all request quota is fully restored. In a sliding window, hits decay gradually — current window hits become "previous" at the window boundary, then take another full window to fully decay. Full recovery can take up to 2x the window duration.'
-                                    : 'Time until the current fixed window expires and the request counter resets to zero. All quota is restored instantly at this point.'}
+                                    : algorithm === 'token-bucket'
+                                      ? limited
+                                          ? 'Time until the server will accept requests again, based on the Retry-After response header.'
+                                          : 'Time until the token bucket is completely refilled. Tokens are added gradually at the configured refill rate.'
+                                      : 'Time until the current fixed window expires and the request counter resets to zero. All quota is restored instantly at this point.'}
                             </span>
                         </span>
                     </span>
@@ -149,11 +205,15 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                                 ) : (
                                     <RecoveryTimer entry={latestEntry} windowMs={windowMs} />
                                 )
+                            ) : algorithm === 'token-bucket' ? (
+                                limited ? (
+                                    <RetryAfterTimer entry={latestEntry} />
+                                ) : (
+                                    resetTime && <CountdownTimer resetTime={resetTime} windowMs={windowMs} />
+                                )
                             ) : (
                                 resetTime && <CountdownTimer resetTime={resetTime} windowMs={windowMs} />
                             )
-                        ) : algorithm === 'fixed-window' ? (
-                            <EpochWindowTimer windowMs={windowMs} />
                         ) : (
                             '--:--'
                         )}
@@ -187,12 +247,18 @@ export function StatusDashboard({ latestEntry, windowMs, algorithm }: StatusDash
                         windowMs={windowMs}
                         hits={windowExpired ? 0 : (latestEntry?.currentWindowHits ?? 0)}
                         limit={latestEntry?.limit ?? 10}
+                        resetTime={resetTime}
                     />
                 </div>
             )}
             {algorithm === 'sliding-window' && latestEntry && latestEntry.currentWindowHits + latestEntry.previousWindowHits > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
                     <SlidingWindowDiagram entry={latestEntry} windowMs={windowMs} limit={limit} />
+                </div>
+            )}
+            {algorithm === 'token-bucket' && latestEntry && (
+                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800">
+                    <TokenBucketDiagram tokens={remaining} capacity={limit} refillRate={refillRate ?? 1} refillMs={refillMs ?? 1000} />
                 </div>
             )}
         </div>

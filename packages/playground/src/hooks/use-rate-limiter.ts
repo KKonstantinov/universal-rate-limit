@@ -6,7 +6,7 @@ import type { PlaygroundConfig, RequestLogEntry } from '../lib/types';
 const DEFAULT_CONFIG: PlaygroundConfig = {
     limit: 10,
     windowMs: 10_000,
-    algorithm: 'fixed-window',
+    algorithm: 'sliding-window',
     headers: 'draft-7',
     legacyHeaders: false
 };
@@ -53,7 +53,10 @@ export function useRateLimiter() {
             windowMs: String(current.windowMs),
             algorithm: current.algorithm,
             headers: current.headers,
-            legacyHeaders: String(current.legacyHeaders)
+            legacyHeaders: String(current.legacyHeaders),
+            ...(current.algorithm === 'token-bucket'
+                ? { refillRate: String(current.refillRate ?? 1), refillMs: String(current.refillMs ?? 1000) }
+                : {})
         });
 
         try {

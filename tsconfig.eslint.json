@@ -19,6 +19,7 @@
         "packages/benchmarks/*.config.ts",
         "packages/playground/src/**/*.ts",
         "packages/playground/src/**/*.tsx",
+        "packages/playground/test",
         "packages/playground/*.config.ts",
         "examples/*/src",
         "examples/*/test",

@@ -250,3 +250,224 @@ describe('Window expiration (real timers)', () => {
         }
     });
 });
+
+describe('Retry-After correctness (real timers)', () => {
+    let server: http.Server | undefined;
+
+    afterEach(async () => {
+        if (server) {
+            await closeServer(server);
+            server = undefined;
+        }
+    });
+
+    it('fixed-window: wait Retry-After duration then unblocked', async () => {
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'fixed-window', windowMs: 2000 } });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                const response = await buildRateLimitResponse(webReq, result, {});
+                res.writeHead(response.status, Object.fromEntries(response.headers));
+                res.end(await response.text());
+            } else {
+                for (const [key, value] of Object.entries(result.headers)) {
+                    res.setHeader(key, value);
+                }
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Exhaust the limit
+        await fetch(url, ip);
+        await fetch(url, ip);
+
+        // Get 429 with Retry-After
+        const blocked = await fetch(url, ip);
+        expect(blocked.status).toBe(429);
+        const retryAfter = Number(blocked.headers.get('retry-after'));
+        expect(retryAfter).toBeGreaterThan(0);
+
+        // Wait the Retry-After duration + margin
+        await sleep(retryAfter * 1000 + 200);
+
+        // Should be unblocked
+        const unblocked = await fetch(url, ip);
+        expect(unblocked.status).toBe(200);
+    });
+
+    it('sliding-window: wait Retry-After duration then unblocked', async () => {
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 2000 } });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                const response = await buildRateLimitResponse(webReq, result, {});
+                res.writeHead(response.status, Object.fromEntries(response.headers));
+                res.end(await response.text());
+            } else {
+                for (const [key, value] of Object.entries(result.headers)) {
+                    res.setHeader(key, value);
+                }
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Exhaust the limit
+        await fetch(url, ip);
+        await fetch(url, ip);
+
+        // Get 429 with Retry-After
+        const blocked = await fetch(url, ip);
+        expect(blocked.status).toBe(429);
+        const retryAfter = Number(blocked.headers.get('retry-after'));
+        expect(retryAfter).toBeGreaterThan(0);
+
+        // Wait the Retry-After duration + margin
+        await sleep(retryAfter * 1000 + 200);
+
+        // Should be unblocked
+        const unblocked = await fetch(url, ip);
+        expect(unblocked.status).toBe(200);
+    });
+
+    it('token-bucket: wait Retry-After duration then unblocked', async () => {
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'token-bucket', refillRate: 2 } });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                const response = await buildRateLimitResponse(webReq, result, {});
+                res.writeHead(response.status, Object.fromEntries(response.headers));
+                res.end(await response.text());
+            } else {
+                for (const [key, value] of Object.entries(result.headers)) {
+                    res.setHeader(key, value);
+                }
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Exhaust the limit (2 tokens)
+        await fetch(url, ip);
+        await fetch(url, ip);
+
+        // Get 429 with Retry-After
+        const blocked = await fetch(url, ip);
+        expect(blocked.status).toBe(429);
+        const retryAfter = Number(blocked.headers.get('retry-after'));
+        expect(retryAfter).toBeGreaterThan(0);
+
+        // Wait the Retry-After duration + margin
+        await sleep(retryAfter * 1000 + 200);
+
+        // Should be unblocked
+        const unblocked = await fetch(url, ip);
+        expect(unblocked.status).toBe(200);
+    });
+});
+
+describe('Token bucket (real timers)', () => {
+    let server: http.Server | undefined;
+
+    afterEach(async () => {
+        if (server) {
+            await closeServer(server);
+            server = undefined;
+        }
+    });
+
+    it('exhaust tokens, wait for refill, then unblocked', async () => {
+        // refillRate=2 means 2 tokens/sec; limit=2 means bucket starts with 2 tokens
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'token-bucket', refillRate: 2 } });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                res.writeHead(429);
+                res.end('Limited');
+            } else {
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Exhaust both tokens
+        const r1 = await fetch(url, ip);
+        expect(r1.status).toBe(200);
+        const r2 = await fetch(url, ip);
+        expect(r2.status).toBe(200);
+
+        // Should be limited
+        const r3 = await fetch(url, ip);
+        expect(r3.status).toBe(429);
+
+        // Wait 600ms — enough for 1.2 tokens at 2 tokens/sec
+        await sleep(600);
+
+        // Should be unblocked (at least 1 token refilled)
+        const r4 = await fetch(url, ip);
+        expect(r4.status).toBe(200);
+    });
+
+    it('mid-refill remains limited', async () => {
+        // refillRate=1 means 1 token/sec; limit=5 means bucket starts with 5 tokens
+        const limiter = rateLimit({ limit: 5, algorithm: { type: 'token-bucket', refillRate: 1 } });
+
+        const started = await startServer(async (req, res) => {
+            const webReq = nodeRequestToWebRequest(req);
+            const result = await limiter(webReq);
+            if (result.limited) {
+                res.writeHead(429);
+                res.end('Limited');
+            } else {
+                res.writeHead(200);
+                res.end('OK');
+            }
+        });
+        server = started.server;
+
+        const url = `http://localhost:${started.port}/`;
+        const ip = { headers: { 'x-forwarded-for': '10.0.0.1' } };
+
+        // Exhaust all 5 tokens
+        for (let i = 0; i < 5; i++) {
+            const r = await fetch(url, ip);
+            expect(r.status).toBe(200);
+        }
+
+        // Should be limited
+        const blocked = await fetch(url, ip);
+        expect(blocked.status).toBe(429);
+
+        // Wait 200ms — only 0.2 tokens at 1 token/sec, not enough
+        await sleep(200);
+
+        // Should still be limited
+        const stillBlocked = await fetch(url, ip);
+        expect(stillBlocked.status).toBe(429);
+    });
+});

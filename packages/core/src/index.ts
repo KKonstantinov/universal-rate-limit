@@ -668,10 +668,10 @@ export class MemoryStore implements Store {
     private timer: ReturnType<typeof setInterval> | undefined;
 
     /** @param options - Optional store configuration (prefix, cleanup interval). */
-    constructor(options?: MemoryStoreOptions) {
-        this.prefix = options?.prefix || undefined;
+    constructor(options: MemoryStoreOptions = {}) {
+        this.prefix = options.prefix || undefined;
 
-        const cleanupMs = options?.cleanupIntervalMs ?? MEMORY_STORE_CLEANUP_INTERVAL_MS;
+        const cleanupMs = options.cleanupIntervalMs ?? MEMORY_STORE_CLEANUP_INTERVAL_MS;
         this.timer = setInterval(() => {
             this.cleanup();
         }, cleanupMs);

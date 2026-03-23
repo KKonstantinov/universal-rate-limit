@@ -10,6 +10,7 @@ export interface PlaygroundConfig {
     headers: HeadersVersion;
     legacyHeaders: boolean;
     refillRate?: number;
+    refillMs?: number;
 }
 
 export interface RequestLogEntry {

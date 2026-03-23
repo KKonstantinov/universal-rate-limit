@@ -70,7 +70,8 @@ function configsMatch(a: LimiterConfig, b: LimiterConfig): boolean {
         a.algorithm === b.algorithm &&
         a.headers === b.headers &&
         a.legacyHeaders === b.legacyHeaders &&
-        (a.refillRate ?? 10) === (b.refillRate ?? 10)
+        (a.refillRate ?? 1) === (b.refillRate ?? 1) &&
+        (a.refillMs ?? 1000) === (b.refillMs ?? 1000)
     );
 }
 
@@ -98,7 +99,7 @@ export interface GetLimiterResult {
 function buildAlgorithmConfig(config: PlaygroundConfig): AlgorithmConfig {
     switch (config.algorithm) {
         case 'token-bucket': {
-            return { type: 'token-bucket', refillRate: config.refillRate ?? 10 };
+            return { type: 'token-bucket', refillRate: config.refillRate ?? 1, refillMs: config.refillMs ?? 1000 };
         }
         case 'fixed-window': {
             return { type: 'fixed-window', windowMs: config.windowMs };

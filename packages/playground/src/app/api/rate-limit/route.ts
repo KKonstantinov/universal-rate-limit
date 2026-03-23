@@ -25,9 +25,11 @@ export async function GET(request: Request) {
     const config = {
         limit: Math.min(100, Math.max(1, parseNumParam(url.searchParams.get('limit'), 10))),
         windowMs: Math.max(1000, parseNumParam(url.searchParams.get('windowMs'), 30_000)),
-        algorithm: pickAllowed(url.searchParams.get('algorithm'), ALLOWED_ALGORITHMS, 'fixed-window'),
+        algorithm: pickAllowed(url.searchParams.get('algorithm'), ALLOWED_ALGORITHMS, 'sliding-window'),
         headers: pickAllowed(url.searchParams.get('headers'), ALLOWED_HEADERS, 'draft-7'),
-        legacyHeaders: url.searchParams.get('legacyHeaders') === 'true'
+        legacyHeaders: url.searchParams.get('legacyHeaders') === 'true',
+        refillRate: Math.max(1, Math.min(100, parseNumParam(url.searchParams.get('refillRate'), 1))),
+        refillMs: Math.max(1000, Math.min(60_000, parseNumParam(url.searchParams.get('refillMs'), 1000)))
     };
 
     const { limiter, configChanged } = getLimiter(ip, config);
