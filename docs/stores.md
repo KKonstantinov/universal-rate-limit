@@ -106,12 +106,10 @@ const store = new RedisStore({
 
 ### Options
 
-| Option                | Type            | Default | Description                              |
-| --------------------- | --------------- | ------- | ---------------------------------------- |
-| `sendCommand`         | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
-| `windowMs`            | `number`        | —       | **Required.** Window duration in ms.     |
-| `prefix`              | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
-| `resetExpiryOnChange` | `boolean`       | `false` | Reset the TTL on every increment.        |
+| Option        | Type            | Default | Description                              |
+| ------------- | --------------- | ------- | ---------------------------------------- |
+| `sendCommand` | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
+| `prefix`      | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
 
 ### How It Works
 

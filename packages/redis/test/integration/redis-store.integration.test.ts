@@ -16,12 +16,11 @@ describe('RedisStore integration', () => {
         await stopRedisContainer(ctx);
     });
 
-    function createStore(options?: { prefix?: string; resetExpiryOnChange?: boolean }) {
+    function createStore(options?: { prefix?: string }) {
         const uniquePrefix = options?.prefix ?? `test-${String(Date.now())}-${String(Math.random()).slice(2, 8)}:`;
         return new RedisStore({
             sendCommand: ctx.sendCommand,
-            prefix: uniquePrefix,
-            resetExpiryOnChange: options?.resetExpiryOnChange
+            prefix: uniquePrefix
         });
     }
 

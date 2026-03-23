@@ -121,20 +121,16 @@ import { RedisStore } from '@universal-rate-limit/redis';
 
 const store = new RedisStore({
     sendCommand: (...args) => redis.call(...args),
-    windowMs: 60_000,
-    prefix: 'rl:',
-    resetExpiryOnChange: false
+    prefix: 'rl:'
 });
 ```
 
 **Constructor:**
 
-| Parameter             | Type            | Default | Description                              |
-| --------------------- | --------------- | ------- | ---------------------------------------- |
-| `sendCommand`         | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
-| `windowMs`            | `number`        | —       | **Required.** Window duration in ms.     |
-| `prefix`              | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
-| `resetExpiryOnChange` | `boolean`       | `false` | Reset the TTL on every increment.        |
+| Parameter     | Type            | Default | Description                              |
+| ------------- | --------------- | ------- | ---------------------------------------- |
+| `sendCommand` | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
+| `prefix`      | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
 
 **Methods:**
 

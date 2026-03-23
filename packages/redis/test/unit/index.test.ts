@@ -172,8 +172,7 @@ function createMockRedis(): {
         const windowMs = Number(argv[0]);
         const limit = Number(argv[1]);
         const nowMs = Number(argv[2]);
-        // argv[3] is resetExpiry flag
-        const cost = Number(argv[4]) || 1;
+        const cost = Number(argv[3]) || 1;
 
         const entry = getEntry(key);
 

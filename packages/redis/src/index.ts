@@ -15,7 +15,12 @@ export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-/** A value that can be returned from a raw Redis command. */
+/**
+ * A value that can be returned from a raw Redis command.
+ *
+ * Redis replies are recursively typed — simple commands return `string | number | null`,
+ * while multi-bulk replies (e.g. `EVALSHA`) return nested arrays.
+ */
 export type RedisReply = string | number | null | RedisReply[];
 
 /**
@@ -39,18 +44,23 @@ export interface RedisStoreOptions {
     sendCommand: SendCommandFn;
     /** Key prefix prepended to every rate limit key in Redis. @default 'rl:' */
     prefix?: string;
-    /** When `true`, the key TTL is refreshed on every increment (fixed-window only). @default false */
-    resetExpiryOnChange?: boolean;
 }
 
 // ── Script handler registry ─────────────────────────────────────────────────
 
+/** Maps an algorithm name to its Lua scripts and argument/result serializers for Redis execution. */
 interface ScriptHandler {
+    /** Lua script source for the consume (increment + check) operation. */
     consumeScript: string;
+    /** Lua script source for the peek (read-only check) operation. */
     peekScript: string;
+    /** Build the KEYS + ARGV array for the consume Lua script. */
     buildConsumeArgs(fullKey: string, algorithm: Algorithm, limit: number, nowMs: number, cost: number): string[];
+    /** Build the KEYS + ARGV array for the peek Lua script. */
     buildPeekArgs(fullKey: string, algorithm: Algorithm, limit: number, nowMs: number): string[];
+    /** Parse the Redis reply from the consume script into a {@link ConsumeResult}. */
     parseConsumeResult(reply: RedisReply, nowMs: number): ConsumeResult;
+    /** Parse the Redis reply from the peek script into a {@link ConsumeResult}, or `null` if the key does not exist. */
     parsePeekResult(reply: RedisReply, nowMs: number): ConsumeResult | null;
 }
 
@@ -81,8 +91,7 @@ const fixedWindowHandler: ScriptHandler = {
 
     buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
         const windowMs = algorithm.config.windowMs;
-        const resetExpiry = '0'; // could be made configurable
-        return [fullKey, String(windowMs), String(limit), String(nowMs), resetExpiry, String(cost)];
+        return [fullKey, String(windowMs), String(limit), String(nowMs), String(cost)];
     },
 
     buildPeekArgs(fullKey, _algorithm, limit, nowMs) {
@@ -201,34 +210,48 @@ const SCRIPT_REGISTRY = new Map<string, ScriptHandler>([
 export class RedisStore implements Store {
     private readonly sendCommand: SendCommandFn;
     readonly prefix: string;
-    private readonly resetExpiryOnChange: boolean;
 
     private readonly shaPromises = new Map<string, Promise<string>>();
 
-    /** @param options - Redis store configuration. */
+    /**
+     * Create a new Redis-backed rate limit store.
+     *
+     * @param options - Configuration for the Redis store. See {@link RedisStoreOptions}.
+     */
     constructor(options: RedisStoreOptions) {
         this.sendCommand = options.sendCommand;
         this.prefix = options.prefix ?? 'rl:';
-        this.resetExpiryOnChange = options.resetExpiryOnChange ?? false;
     }
 
-    /** Consume capacity for the given key. @param cost - Units to consume (default 1). */
+    /**
+     * Consume rate limit capacity for the given key.
+     *
+     * Executes the algorithm-specific Lua script atomically in Redis.
+     *
+     * @param key - The rate limit key (e.g. client IP). The configured {@link RedisStoreOptions.prefix | prefix} is prepended automatically.
+     * @param algorithm - The rate limiting algorithm to use (e.g. from {@link fixedWindow}, {@link slidingWindow}, or {@link tokenBucket}).
+     * @param limit - The maximum number of requests allowed in the window.
+     * @param cost - Number of units to consume. @default 1
+     * @returns The consume result indicating whether the request is limited and how much capacity remains.
+     */
     async consume(key: string, algorithm: Algorithm, limit: number, cost = 1): Promise<ConsumeResult> {
         const handler = this.getHandler(algorithm.name);
         const fullKey = this.prefix + key;
         const nowMs = Date.now();
 
-        // Override resetExpiryOnChange for fixed-window if configured
-        let args = handler.buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost);
-        if (algorithm.name === 'fixed-window' && this.resetExpiryOnChange) {
-            args = [fullKey, String(algorithm.config.windowMs), String(limit), String(nowMs), '1', String(cost)];
-        }
-
+        const args = handler.buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost);
         const reply = await this.evalScript(handler.consumeScript, args);
         return handler.parseConsumeResult(reply, nowMs);
     }
 
-    /** Peek at the current state without consuming. */
+    /**
+     * Peek at the current rate limit state without consuming any capacity.
+     *
+     * @param key - The rate limit key. The configured {@link RedisStoreOptions.prefix | prefix} is prepended automatically.
+     * @param algorithm - The rate limiting algorithm to use.
+     * @param limit - The maximum number of requests allowed in the window.
+     * @returns The current state, or `undefined` if the key does not exist in Redis.
+     */
     async peek(key: string, algorithm: Algorithm, limit: number): Promise<ConsumeResult | undefined> {
         const handler = this.getHandler(algorithm.name);
         const fullKey = this.prefix + key;
@@ -239,12 +262,20 @@ export class RedisStore implements Store {
         return handler.parsePeekResult(reply, nowMs) ?? undefined;
     }
 
-    /** Delete the rate limit key from Redis. */
+    /**
+     * Delete the rate limit state for a single key from Redis.
+     *
+     * @param key - The rate limit key to delete. The configured {@link RedisStoreOptions.prefix | prefix} is prepended automatically.
+     */
     async resetKey(key: string): Promise<void> {
         await this.sendCommand('DEL', this.prefix + key);
     }
 
-    /** Scan and delete all keys matching the configured prefix. */
+    /**
+     * Delete all rate limit keys matching the configured {@link RedisStoreOptions.prefix | prefix}.
+     *
+     * Uses `SCAN` to iterate keys incrementally, avoiding blocking Redis with a single `KEYS` call.
+     */
     async resetAll(): Promise<void> {
         let cursor = '0';
         do {

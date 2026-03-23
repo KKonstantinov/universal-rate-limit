@@ -10,8 +10,7 @@
  * ARGV[1] = windowMs (TTL in milliseconds)
  * ARGV[2] = limit
  * ARGV[3] = nowMs (current time in milliseconds)
- * ARGV[4] = resetExpiryOnChange ("1" or "0")
- * ARGV[5] = cost (units to consume, default 1)
+ * ARGV[4] = cost (units to consume, default 1)
  *
  * Returns: { limited (0 or 1), remaining, resetTime (absolute ms), retryAfterMs }
  * as a four-element array.
@@ -21,8 +20,7 @@ local key = KEYS[1]
 local windowMs = tonumber(ARGV[1])
 local limit = tonumber(ARGV[2])
 local nowMs = tonumber(ARGV[3])
-local resetExpiry = ARGV[4] == "1"
-local cost = tonumber(ARGV[5]) or 1
+local cost = tonumber(ARGV[4]) or 1
 
 local ttl = redis.call("PTTL", key)
 local hits
@@ -34,12 +32,7 @@ if ttl <= 0 then
     resetTime = nowMs + windowMs
 else
     hits = redis.call("INCRBY", key, cost)
-    if resetExpiry then
-        redis.call("PEXPIRE", key, windowMs)
-        resetTime = nowMs + windowMs
-    else
-        resetTime = nowMs + ttl
-    end
+    resetTime = nowMs + ttl
 end
 
 local limited = hits > limit and 1 or 0

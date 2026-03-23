@@ -330,7 +330,9 @@ function generateHeaders(
 
 /** Internal state for the fixed-window algorithm. */
 interface FixedWindowState {
+    /** Number of hits recorded in the current window. */
     hits: number;
+    /** Timestamp (ms since epoch) when the current window started. */
     windowStart: number;
 }
 
@@ -385,8 +387,11 @@ export function fixedWindow(options: { windowMs: number }): Algorithm<FixedWindo
 
 /** Internal state for the sliding-window algorithm. */
 interface SlidingWindowState {
+    /** Number of hits recorded in the current window. */
     currentHits: number;
+    /** Number of hits recorded in the previous (expired) window, used for weighted interpolation. */
     previousHits: number;
+    /** Timestamp (ms since epoch) when the current window started. */
     windowStart: number;
 }
 
@@ -506,7 +511,9 @@ export function slidingWindow(options: { windowMs: number }): Algorithm<SlidingW
 
 /** Internal state for the token-bucket algorithm. */
 interface TokenBucketState {
+    /** Number of tokens currently available in the bucket. */
     tokens: number;
+    /** Timestamp (ms since epoch) when tokens were last refilled. */
     lastRefillMs: number;
 }
 
@@ -638,7 +645,9 @@ const MEMORY_STORE_CLEANUP_INTERVAL_MS = 60_000;
 
 /** Internal entry in the MemoryStore. */
 interface MemoryEntry {
+    /** The algorithm-specific state stored for this key. */
     state: unknown;
+    /** Timestamp (ms since epoch) after which this entry can be evicted during cleanup. */
     expiresAt: number;
 }
 
