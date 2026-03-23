@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { rateLimit, MemoryStore } from '../../dist/index.mjs';
+import { rateLimit, MemoryStore, fixedWindow } from '../../dist/index.mjs';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
     return new Request(`http://localhost${path}`, {
@@ -45,7 +45,8 @@ describe('rateLimit core (Bun)', () => {
     });
 
     it('window expiration with real timer', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 300 });
+        // Use fixed-window for a clean reset after windowMs
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'fixed-window', windowMs: 300 } });
         const req = createRequest();
 
         const r1 = await limiter(req);
@@ -62,29 +63,26 @@ describe('rateLimit core (Bun)', () => {
 });
 
 describe('MemoryStore (Bun)', () => {
-    it('increment, decrement, resetKey, resetAll', async () => {
-        const store = new MemoryStore(60_000);
+    it('consume, resetKey, resetAll', () => {
+        const store = new MemoryStore();
+        const algo = fixedWindow({ windowMs: 60_000 });
         try {
-            const r1 = await store.increment('k1');
-            expect(r1.currentHits).toBe(1);
+            const r1 = store.consume('k1', algo, 100);
+            expect(r1.remaining).toBe(99);
 
-            const r2 = await store.increment('k1');
-            expect(r2.currentHits).toBe(2);
+            const r2 = store.consume('k1', algo, 100);
+            expect(r2.remaining).toBe(98);
 
-            await store.decrement('k1');
-            const r3 = await store.increment('k1');
-            expect(r3.currentHits).toBe(2);
+            store.resetKey('k1');
+            const r3 = store.consume('k1', algo, 100);
+            expect(r3.remaining).toBe(99);
 
-            await store.resetKey('k1');
-            const r4 = await store.increment('k1');
-            expect(r4.currentHits).toBe(1);
-
-            await store.increment('k2');
-            await store.resetAll();
-            const r5 = await store.increment('k1');
-            const r6 = await store.increment('k2');
-            expect(r5.currentHits).toBe(1);
-            expect(r6.currentHits).toBe(1);
+            store.consume('k2', algo, 100);
+            store.resetAll();
+            const r4 = store.consume('k1', algo, 100);
+            const r5 = store.consume('k2', algo, 100);
+            expect(r4.remaining).toBe(99);
+            expect(r5.remaining).toBe(99);
         } finally {
             store.shutdown();
         }

@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Algorithm } from 'universal-rate-limit';
-import type { RequestLogEntry } from '../lib/types';
+import type { AlgorithmName, RequestLogEntry } from '../lib/types';
 import { computeSlidingWeight } from '../lib/window-utils';
 import { CountdownTimer } from './countdown-timer';
 import { EpochWindowTimer } from './epoch-window-timer';
@@ -15,7 +14,7 @@ import { StatusBadge } from './status-badge';
 interface StatusDashboardProps {
     latestEntry: RequestLogEntry | null;
     windowMs: number;
-    algorithm: Algorithm;
+    algorithm: AlgorithmName;
 }
 
 /**

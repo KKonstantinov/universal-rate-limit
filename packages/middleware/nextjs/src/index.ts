@@ -1,7 +1,17 @@
 import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions, RateLimitResult } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStore,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Next.js middleware adapters. */
 export type NextjsRateLimitOptions = RateLimitOptions;

@@ -211,7 +211,7 @@ describe('HTTP server integration', () => {
     });
 
     it('sliding-window sends correct headers and blocks after decay', async () => {
-        const limiter = rateLimit({ limit: 3, windowMs: 60_000, algorithm: 'sliding-window' });
+        const limiter = rateLimit({ limit: 3, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);

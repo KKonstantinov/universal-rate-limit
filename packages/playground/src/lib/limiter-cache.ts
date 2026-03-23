@@ -1,4 +1,5 @@
 import { rateLimit, MemoryStore } from 'universal-rate-limit';
+import type { AlgorithmConfig } from 'universal-rate-limit';
 import type { PlaygroundConfig } from './types';
 
 /** Maximum number of cached limiter instances (one per IP). */
@@ -68,7 +69,8 @@ function configsMatch(a: LimiterConfig, b: LimiterConfig): boolean {
         a.windowMs === b.windowMs &&
         a.algorithm === b.algorithm &&
         a.headers === b.headers &&
-        a.legacyHeaders === b.legacyHeaders
+        a.legacyHeaders === b.legacyHeaders &&
+        (a.refillRate ?? 10) === (b.refillRate ?? 10)
     );
 }
 
@@ -90,6 +92,21 @@ function evictOldest(cache: Map<string, CachedEntry>): void {
 export interface GetLimiterResult {
     limiter: (request: Request) => ReturnType<ReturnType<typeof rateLimit>>;
     configChanged: boolean;
+}
+
+/** Map a PlaygroundConfig algorithm name to an AlgorithmConfig object. */
+function buildAlgorithmConfig(config: PlaygroundConfig): AlgorithmConfig {
+    switch (config.algorithm) {
+        case 'token-bucket': {
+            return { type: 'token-bucket', refillRate: config.refillRate ?? 10 };
+        }
+        case 'fixed-window': {
+            return { type: 'fixed-window', windowMs: config.windowMs };
+        }
+        case 'sliding-window': {
+            return { type: 'sliding-window', windowMs: config.windowMs };
+        }
+    }
 }
 
 /**
@@ -117,10 +134,14 @@ export function getLimiter(ip: string, config: LimiterConfig): GetLimiterResult 
         evictOldest(cache);
     }
 
-    const store = new MemoryStore(config.windowMs);
+    const store = new MemoryStore();
+    const algoConfig = buildAlgorithmConfig(config);
     const limiter = rateLimit({
-        ...config,
+        limit: config.limit,
+        algorithm: algoConfig,
         store,
+        headers: config.headers,
+        legacyHeaders: config.legacyHeaders,
         keyGenerator: () => ip
     });
 
@@ -143,25 +164,27 @@ export function getStoreHits(ip: string): StoreHits {
         return { currentWindowHits: 0, previousWindowHits: 0 };
     }
 
-    interface WindowEntry {
-        hits: number;
-        resetTime: number;
-    }
-
+    // Access the opaque entries map inside MemoryStore (playground-only, fragile)
     const store = entry.store as unknown as {
-        current: Map<string, WindowEntry> | undefined;
-        previous: Map<string, WindowEntry> | undefined;
-        windowMs: number | undefined;
+        entries: Map<string, { state: unknown; expiresAt: number }> | undefined;
     };
 
-    const now = Date.now();
-    const currentEntry = store.current?.get(ip);
-    const previousEntry = store.previous?.get(ip);
+    const storeEntry = store.entries?.get(ip);
+    if (!storeEntry || storeEntry.expiresAt <= Date.now()) {
+        return { currentWindowHits: 0, previousWindowHits: 0 };
+    }
 
-    const currentWindowHits = currentEntry && currentEntry.resetTime > now ? currentEntry.hits : 0;
-    const previousWindowHits = previousEntry && previousEntry.resetTime > now - (store.windowMs ?? 0) ? previousEntry.hits : 0;
+    const algorithm = entry.config.algorithm;
+    const state = storeEntry.state as Record<string, number>;
 
-    return { currentWindowHits, previousWindowHits };
+    if (algorithm === 'fixed-window') {
+        return { currentWindowHits: state.hits, previousWindowHits: 0 };
+    }
+    if (algorithm === 'sliding-window') {
+        return { currentWindowHits: state.currentHits, previousWindowHits: state.previousHits };
+    }
+    // Token bucket doesn't have window hits, return tokens info
+    return { currentWindowHits: 0, previousWindowHits: 0 };
 }
 
 export function resetByIp(ip: string): void {
@@ -185,8 +208,7 @@ function getApiLimiter(): ReturnType<typeof rateLimit> {
     if (!apiLimiter) {
         apiLimiter = rateLimit({
             limit: API_RATE_LIMIT,
-            windowMs: API_WINDOW_MS,
-            algorithm: 'fixed-window',
+            algorithm: { type: 'fixed-window', windowMs: API_WINDOW_MS },
             headers: 'draft-7'
         });
     }

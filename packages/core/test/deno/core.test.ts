@@ -1,5 +1,5 @@
 import { assertEquals, assertMatch } from 'jsr:@std/assert';
-import { rateLimit, MemoryStore } from '../../dist/index.mjs';
+import { rateLimit, MemoryStore, fixedWindow } from '../../dist/index.mjs';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
     return new Request(`http://localhost${path}`, {
@@ -8,7 +8,7 @@ function createRequest(ip = '1.2.3.4', path = '/'): Request {
 }
 
 Deno.test('rateLimit allows requests under the limit and blocks over it', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     try {
         const limiter = rateLimit({ limit: 2, windowMs: 60_000, store });
         const req = createRequest();
@@ -30,35 +30,32 @@ Deno.test('rateLimit allows requests under the limit and blocks over it', async 
 });
 
 Deno.test('MemoryStore operations', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
+    const algo = fixedWindow({ windowMs: 60_000 });
     try {
-        const r1 = await store.increment('k1');
-        assertEquals(r1.currentHits, 1);
+        const r1 = store.consume('k1', algo, 100);
+        assertEquals(r1.remaining, 99);
 
-        const r2 = await store.increment('k1');
-        assertEquals(r2.currentHits, 2);
+        const r2 = store.consume('k1', algo, 100);
+        assertEquals(r2.remaining, 98);
 
-        await store.decrement('k1');
-        const r3 = await store.increment('k1');
-        assertEquals(r3.currentHits, 2);
+        store.resetKey('k1');
+        const r3 = store.consume('k1', algo, 100);
+        assertEquals(r3.remaining, 99);
 
-        await store.resetKey('k1');
-        const r4 = await store.increment('k1');
-        assertEquals(r4.currentHits, 1);
-
-        await store.increment('k2');
-        await store.resetAll();
-        const r5 = await store.increment('k1');
-        const r6 = await store.increment('k2');
-        assertEquals(r5.currentHits, 1);
-        assertEquals(r6.currentHits, 1);
+        store.consume('k2', algo, 100);
+        store.resetAll();
+        const r4 = store.consume('k1', algo, 100);
+        const r5 = store.consume('k2', algo, 100);
+        assertEquals(r4.remaining, 99);
+        assertEquals(r5.remaining, 99);
     } finally {
         store.shutdown();
     }
 });
 
 Deno.test('generates draft-7 headers by default', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     try {
         const limiter = rateLimit({ limit: 10, windowMs: 60_000, store });
         const result = await limiter(createRequest());
@@ -71,7 +68,7 @@ Deno.test('generates draft-7 headers by default', async () => {
 });
 
 Deno.test('generates draft-6 headers when configured', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     try {
         const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6', store });
         const result = await limiter(createRequest());
@@ -84,19 +81,21 @@ Deno.test('generates draft-6 headers when configured', async () => {
     }
 });
 
-Deno.test('setInterval unref compatibility — timer does not block', async () => {
+Deno.test('setInterval unref compatibility — timer does not block', () => {
     // The MemoryStore constructor checks `'unref' in timer` and calls it
     // This test verifies the store can be created and shut down cleanly in Deno
-    const store = new MemoryStore(1000);
-    const result = await store.increment('test');
-    assertEquals(result.currentHits, 1);
+    const store = new MemoryStore();
+    const algo = fixedWindow({ windowMs: 1_000 });
+    const result = store.consume('test', algo, 10);
+    assertEquals(result.remaining, 9);
     store.shutdown();
 });
 
 Deno.test('window expiration with real timer', async () => {
-    const store = new MemoryStore(300);
+    const store = new MemoryStore();
     try {
-        const limiter = rateLimit({ limit: 1, windowMs: 300, store });
+        // Use fixed-window for a clean reset after windowMs
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'fixed-window', windowMs: 300 }, store });
         const req = createRequest();
 
         const r1 = await limiter(req);

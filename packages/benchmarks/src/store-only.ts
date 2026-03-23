@@ -1,11 +1,11 @@
 /**
- * Store-only benchmark: isolates the raw MemoryStore.increment() performance
+ * Store-only benchmark: isolates the raw MemoryStore.consume() performance
  * from request construction overhead.
  *
  * This gives the most accurate comparison of the core data structure performance.
  */
 
-import { MemoryStore as UniversalMemoryStore } from 'universal-rate-limit';
+import { MemoryStore as UniversalMemoryStore, fixedWindow, slidingWindow } from 'universal-rate-limit';
 import { MemoryStore as ExpressMemoryStore } from 'express-rate-limit';
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -14,6 +14,7 @@ const OPERATIONS = 500_000;
 const WARMUP_OPS = 50_000;
 const KEY_POOL_SIZE = 1000;
 const WINDOW_MS = 60_000;
+const LIMIT = 1_000_000; // High limit so we never get rate-limited during benchmark
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,8 +48,9 @@ async function bench(name: string, fn: (i: number) => unknown, ops: number): Pro
 
 async function benchUniversalStore(): Promise<BenchResult> {
     const keys = generateKeys(KEY_POOL_SIZE);
-    const store = new UniversalMemoryStore(WINDOW_MS);
-    const result = await bench('universal-rate-limit MemoryStore', i => store.increment(keys[i % KEY_POOL_SIZE]), OPERATIONS);
+    const store = new UniversalMemoryStore();
+    const algo = fixedWindow({ windowMs: WINDOW_MS });
+    const result = await bench('universal-rate-limit MemoryStore', i => store.consume(keys[i % KEY_POOL_SIZE], algo, LIMIT), OPERATIONS);
     store.shutdown();
     return result;
 }
@@ -64,15 +66,20 @@ async function benchExpressStore(): Promise<BenchResult> {
 
 async function benchUniversalStoreSlidingWindow(): Promise<BenchResult> {
     const keys = generateKeys(KEY_POOL_SIZE);
-    const store = new UniversalMemoryStore(WINDOW_MS);
-    const result = await bench('universal MemoryStore (sliding window)', i => store.increment(keys[i % KEY_POOL_SIZE]), OPERATIONS);
+    const store = new UniversalMemoryStore();
+    const algo = slidingWindow({ windowMs: WINDOW_MS });
+    const result = await bench(
+        'universal MemoryStore (sliding window)',
+        i => store.consume(keys[i % KEY_POOL_SIZE], algo, LIMIT),
+        OPERATIONS
+    );
     store.shutdown();
     return result;
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
 
-console.log('MemoryStore.increment() Benchmark');
+console.log('MemoryStore.consume() Benchmark');
 console.log('='.repeat(70));
 console.log(`Operations: ${OPERATIONS.toLocaleString()} | Warmup: ${WARMUP_OPS.toLocaleString()} | Keys: ${String(KEY_POOL_SIZE)}`);
 console.log('');

@@ -1,11 +1,15 @@
-import type { Algorithm, HeadersVersion } from 'universal-rate-limit';
+import type { HeadersVersion } from 'universal-rate-limit';
+
+/** Algorithm names supported by the playground UI. */
+export type AlgorithmName = 'fixed-window' | 'sliding-window' | 'token-bucket';
 
 export interface PlaygroundConfig {
     limit: number;
     windowMs: number;
-    algorithm: Algorithm;
+    algorithm: AlgorithmName;
     headers: HeadersVersion;
     legacyHeaders: boolean;
+    refillRate?: number;
 }
 
 export interface RequestLogEntry {

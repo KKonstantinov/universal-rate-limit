@@ -1,7 +1,8 @@
-import type { Algorithm, HeadersVersion } from 'universal-rate-limit';
+import type { HeadersVersion } from 'universal-rate-limit';
+import type { AlgorithmName } from '../../../lib/types';
 import { getLimiter, getClientIp, getStoreHits, checkApiRateLimit } from '../../../lib/limiter-cache';
 
-const ALLOWED_ALGORITHMS: Algorithm[] = ['fixed-window', 'sliding-window'];
+const ALLOWED_ALGORITHMS: AlgorithmName[] = ['fixed-window', 'sliding-window', 'token-bucket'];
 const ALLOWED_HEADERS: HeadersVersion[] = ['draft-7', 'draft-6'];
 
 function parseNumParam(value: string | null, fallback: number): number {

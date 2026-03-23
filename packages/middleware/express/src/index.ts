@@ -2,7 +2,17 @@ import type { Request as ExpressRequest, Response as ExpressResponse, NextFuncti
 import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions, RateLimitResult } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStore,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Express middleware adapter. */
 export type ExpressRateLimitOptions = RateLimitOptions<ExpressRequest>;

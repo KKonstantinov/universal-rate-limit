@@ -1,9 +1,17 @@
-import type { Store, IncrementResult } from 'universal-rate-limit';
-import { GET_SCRIPT, INCREMENT_SCRIPT } from './scripts.js';
+import type { Store, Algorithm, ConsumeResult } from 'universal-rate-limit';
+import {
+    FIXED_WINDOW_CONSUME,
+    FIXED_WINDOW_PEEK,
+    SLIDING_WINDOW_CONSUME,
+    SLIDING_WINDOW_PEEK,
+    TOKEN_BUCKET_CONSUME,
+    TOKEN_BUCKET_PEEK
+} from './scripts.js';
 
 // ── Re-exports from core ────────────────────────────────────────────────────
 
-export type { Store, IncrementResult } from 'universal-rate-limit';
+export type { Store, ConsumeResult, Algorithm, AlgorithmConfig, MemoryStoreOptions } from 'universal-rate-limit';
+export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,50 +37,143 @@ export type SendCommandFn = (...args: string[]) => Promise<RedisReply>;
 export interface RedisStoreOptions {
     /** Function that sends a raw Redis command. See {@link SendCommandFn}. */
     sendCommand: SendCommandFn;
-    /** Duration of the rate limit window in milliseconds. */
-    windowMs: number;
     /** Key prefix prepended to every rate limit key in Redis. @default 'rl:' */
     prefix?: string;
-    /** When `true`, the key TTL is refreshed on every increment. @default false */
+    /** When `true`, the key TTL is refreshed on every increment (fixed-window only). @default false */
     resetExpiryOnChange?: boolean;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── Script handler registry ─────────────────────────────────────────────────
+
+interface ScriptHandler {
+    consumeScript: string;
+    peekScript: string;
+    buildConsumeArgs(fullKey: string, algorithm: Algorithm, limit: number, nowMs: number, cost: number): string[];
+    buildPeekArgs(fullKey: string, algorithm: Algorithm, limit: number, nowMs: number): string[];
+    parseConsumeResult(reply: RedisReply, nowMs: number): ConsumeResult;
+    parsePeekResult(reply: RedisReply, nowMs: number): ConsumeResult | null;
+}
+
+function assertArrayReply(reply: RedisReply, minLength: number, context: string): asserts reply is RedisReply[] {
+    if (!Array.isArray(reply) || reply.length < minLength) {
+        throw new Error(`Unexpected Redis ${context} reply: ${String(reply)}`);
+    }
+}
+
+function assertFinite(value: number, context: string): void {
+    if (!Number.isFinite(value)) {
+        throw new TypeError(`Non-numeric value in Redis ${context} reply: ${String(value)}`);
+    }
+}
 
 /**
- * Parse the two-element `[totalHits, timeToExpire]` array returned by the
- * Redis Lua scripts into a typed {@link IncrementResult}.
+ * All Lua scripts return a unified 4-element array:
+ * [limited (0/1), remaining, resetTime (absolute ms), retryAfterMs]
  *
- * Redis stores use a single counter per key, so `currentHits` is the total
- * and `previousHits` is always `0`. The algorithm strategy in the core
- * library handles any windowing logic on top of these raw values.
+ * Peek scripts return [-1] when the key doesn't exist.
+ * Token bucket scripts return resetTime as msUntilFull (relative), so
+ * the parser adds nowMs to produce an absolute timestamp.
  */
-function parseScriptResult(reply: RedisReply, windowMs: number): IncrementResult {
-    if (!Array.isArray(reply) || reply.length < 2) {
-        throw new Error(`Unexpected Redis script reply: ${String(reply)}`);
+
+const fixedWindowHandler: ScriptHandler = {
+    consumeScript: FIXED_WINDOW_CONSUME,
+    peekScript: FIXED_WINDOW_PEEK,
+
+    buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
+        const windowMs = algorithm.config.windowMs;
+        const resetExpiry = '0'; // could be made configurable
+        return [fullKey, String(windowMs), String(limit), String(nowMs), resetExpiry, String(cost)];
+    },
+
+    buildPeekArgs(fullKey, _algorithm, limit, nowMs) {
+        return [fullKey, String(limit), String(nowMs)];
+    },
+
+    parseConsumeResult(reply) {
+        const result = parseUnifiedResult(reply);
+        if (!result) throw new Error('Unexpected null from fixed-window consume');
+        return result;
+    },
+    parsePeekResult(reply) {
+        return parseUnifiedResult(reply);
     }
-    const currentHits = Number(reply[0]);
-    const timeToExpire = Number(reply[1]);
-    if (!Number.isFinite(currentHits) || !Number.isFinite(timeToExpire)) {
-        throw new TypeError(`Non-numeric values in Redis script reply: ${String(reply)}`);
+};
+
+const slidingWindowHandler: ScriptHandler = {
+    consumeScript: SLIDING_WINDOW_CONSUME,
+    peekScript: SLIDING_WINDOW_PEEK,
+
+    buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
+        const windowMs = algorithm.config.windowMs;
+        return [fullKey, String(windowMs), String(limit), String(nowMs), String(cost)];
+    },
+
+    buildPeekArgs(fullKey, algorithm, limit, nowMs) {
+        const windowMs = algorithm.config.windowMs;
+        return [fullKey, String(windowMs), String(limit), String(nowMs)];
+    },
+
+    parseConsumeResult(reply) {
+        const result = parseUnifiedResult(reply);
+        if (!result) throw new Error('Unexpected null from sliding-window consume');
+        return result;
+    },
+    parsePeekResult(reply) {
+        return parseUnifiedResult(reply);
     }
-    const resetTime = new Date(Date.now() + (timeToExpire > 0 ? timeToExpire : windowMs));
-    return { currentHits, previousHits: 0, resetTime };
+};
+
+const tokenBucketHandler: ScriptHandler = {
+    consumeScript: TOKEN_BUCKET_CONSUME,
+    peekScript: TOKEN_BUCKET_PEEK,
+
+    buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
+        const refillRate = algorithm.config.refillRate;
+        const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
+        const capacity = 'bucketSize' in algorithm.config ? Number(algorithm.config.bucketSize) : limit;
+        return [fullKey, String(refillRate), String(capacity), String(nowMs), String(cost), String(refillMs)];
+    },
+
+    buildPeekArgs(fullKey, algorithm, limit, nowMs) {
+        const refillRate = algorithm.config.refillRate;
+        const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
+        const capacity = 'bucketSize' in algorithm.config ? Number(algorithm.config.bucketSize) : limit;
+        return [fullKey, String(refillRate), String(capacity), String(nowMs), String(refillMs)];
+    },
+
+    parseConsumeResult(reply) {
+        const result = parseUnifiedResult(reply);
+        if (!result) throw new Error('Unexpected null from token-bucket consume');
+        return result;
+    },
+
+    parsePeekResult(reply) {
+        return parseUnifiedResult(reply);
+    }
+};
+
+/**
+ * Parses the unified [limited, remaining, resetTime, retryAfterMs] reply
+ * used by fixed-window and sliding-window consume scripts.
+ */
+function parseUnifiedResult(reply: RedisReply): ConsumeResult | null {
+    if (Array.isArray(reply) && reply.length === 1 && Number(reply[0]) === -1) return null;
+    assertArrayReply(reply, 4, 'unified');
+    const limited = Number(reply[0]) === 1;
+    const remaining = Number(reply[1]);
+    const resetTimeMs = Number(reply[2]);
+    const retryAfterMs = Number(reply[3]);
+    assertFinite(remaining, 'unified');
+    assertFinite(resetTimeMs, 'unified');
+    assertFinite(retryAfterMs, 'unified');
+    return { limited, remaining, resetTime: new Date(resetTimeMs), retryAfterMs };
 }
 
-function parseGetResult(reply: RedisReply, windowMs: number): IncrementResult | null {
-    if (!Array.isArray(reply) || reply.length < 2) {
-        throw new Error(`Unexpected Redis GET script reply: ${String(reply)}`);
-    }
-    const currentHits = Number(reply[0]);
-    const ttl = Number(reply[1]);
-    if (currentHits === -1) return null;
-    if (!Number.isFinite(currentHits) || !Number.isFinite(ttl)) {
-        throw new TypeError(`Non-numeric values in Redis GET script reply: ${String(reply)}`);
-    }
-    const resetTime = new Date(Date.now() + (ttl > 0 ? ttl : windowMs));
-    return { currentHits, previousHits: 0, resetTime };
-}
+const SCRIPT_REGISTRY = new Map<string, ScriptHandler>([
+    ['fixed-window', fixedWindowHandler],
+    ['sliding-window', slidingWindowHandler],
+    ['token-bucket', tokenBucketHandler]
+]);
 
 // ── RedisStore ──────────────────────────────────────────────────────────────
 
@@ -94,72 +195,48 @@ function parseGetResult(reply: RedisReply, windowMs: number): IncrementResult | 
  *
  * const store = new RedisStore({
  *   sendCommand: (...args) => client.sendCommand(args),
- *   windowMs: 60_000,
  * });
  * ```
  */
 export class RedisStore implements Store {
     private readonly sendCommand: SendCommandFn;
-    private readonly windowMs: number;
     readonly prefix: string;
     private readonly resetExpiryOnChange: boolean;
 
-    private incrementShaPromise: Promise<string> | undefined;
-    private getShaPromise: Promise<string> | undefined;
+    private readonly shaPromises = new Map<string, Promise<string>>();
 
     /** @param options - Redis store configuration. */
     constructor(options: RedisStoreOptions) {
         this.sendCommand = options.sendCommand;
-        this.windowMs = options.windowMs;
         this.prefix = options.prefix ?? 'rl:';
         this.resetExpiryOnChange = options.resetExpiryOnChange ?? false;
     }
 
-    /** Fetch the current hit count and TTL for `key` without incrementing. */
-    async get(key: string): Promise<IncrementResult | undefined> {
+    /** Consume capacity for the given key. @param cost - Units to consume (default 1). */
+    async consume(key: string, algorithm: Algorithm, limit: number, cost = 1): Promise<ConsumeResult> {
+        const handler = this.getHandler(algorithm.name);
         const fullKey = this.prefix + key;
-        this.getShaPromise ??= this.loadScript(GET_SCRIPT);
+        const nowMs = Date.now();
 
-        try {
-            const sha = await this.getShaPromise;
-            const reply = await this.sendCommand('EVALSHA', sha, '1', fullKey);
-            return parseGetResult(reply, this.windowMs) ?? undefined;
-        } catch (error: unknown) {
-            if (isNoscriptError(error)) {
-                const reply = await this.sendCommand('EVAL', GET_SCRIPT, '1', fullKey);
-                this.getShaPromise = this.loadScript(GET_SCRIPT);
-                return parseGetResult(reply, this.windowMs) ?? undefined;
-            }
-            throw error;
+        // Override resetExpiryOnChange for fixed-window if configured
+        let args = handler.buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost);
+        if (algorithm.name === 'fixed-window' && this.resetExpiryOnChange) {
+            args = [fullKey, String(algorithm.config.windowMs), String(limit), String(nowMs), '1', String(cost)];
         }
+
+        const reply = await this.evalScript(handler.consumeScript, args);
+        return handler.parseConsumeResult(reply, nowMs);
     }
 
-    /**
-     * Atomically increment the hit counter for `key` using a Lua script.
-     * If the key does not exist, it is created with a TTL of {@link RedisStoreOptions.windowMs}.
-     */
-    async increment(key: string): Promise<IncrementResult> {
+    /** Peek at the current state without consuming. */
+    async peek(key: string, algorithm: Algorithm, limit: number): Promise<ConsumeResult | undefined> {
+        const handler = this.getHandler(algorithm.name);
         const fullKey = this.prefix + key;
-        const args = [fullKey, String(this.windowMs), this.resetExpiryOnChange ? '1' : '0'];
-        this.incrementShaPromise ??= this.loadScript(INCREMENT_SCRIPT);
+        const nowMs = Date.now();
+        const args = handler.buildPeekArgs(fullKey, algorithm, limit, nowMs);
 
-        try {
-            const sha = await this.incrementShaPromise;
-            const reply = await this.sendCommand('EVALSHA', sha, '1', ...args);
-            return parseScriptResult(reply, this.windowMs);
-        } catch (error: unknown) {
-            if (isNoscriptError(error)) {
-                const reply = await this.sendCommand('EVAL', INCREMENT_SCRIPT, '1', ...args);
-                this.incrementShaPromise = this.loadScript(INCREMENT_SCRIPT);
-                return parseScriptResult(reply, this.windowMs);
-            }
-            throw error;
-        }
-    }
-
-    /** Decrement the counter for `key` by one. */
-    async decrement(key: string): Promise<void> {
-        await this.sendCommand('DECR', this.prefix + key);
+        const reply = await this.evalScript(handler.peekScript, args);
+        return handler.parsePeekResult(reply, nowMs) ?? undefined;
     }
 
     /** Delete the rate limit key from Redis. */
@@ -184,6 +261,33 @@ export class RedisStore implements Store {
     }
 
     // ── Private ─────────────────────────────────────────────────────────────
+
+    private getHandler(algorithmName: string): ScriptHandler {
+        const handler = SCRIPT_REGISTRY.get(algorithmName);
+        if (!handler) {
+            throw new Error(`Unsupported algorithm: ${algorithmName}. RedisStore supports: ${[...SCRIPT_REGISTRY.keys()].join(', ')}`);
+        }
+        return handler;
+    }
+
+    /** Execute a Lua script with EVALSHA, falling back to EVAL on NOSCRIPT. */
+    private async evalScript(script: string, args: string[]): Promise<RedisReply> {
+        const [fullKey, ...scriptArgs] = args;
+        const shaPromise = this.shaPromises.get(script) ?? this.loadScript(script);
+        this.shaPromises.set(script, shaPromise);
+
+        try {
+            const sha = await shaPromise;
+            return await this.sendCommand('EVALSHA', sha, '1', fullKey, ...scriptArgs);
+        } catch (error: unknown) {
+            if (isNoscriptError(error)) {
+                const reply = await this.sendCommand('EVAL', script, '1', fullKey, ...scriptArgs);
+                this.shaPromises.set(script, this.loadScript(script));
+                return reply;
+            }
+            throw error;
+        }
+    }
 
     /** Load a Lua script into the Redis script cache and return its SHA1 hash. */
     private async loadScript(script: string): Promise<string> {

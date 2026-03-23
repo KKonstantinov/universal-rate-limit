@@ -2,7 +2,7 @@ import { assertEquals } from 'jsr:@std/assert';
 import { rateLimit, MemoryStore, buildRateLimitResponse } from '../../dist/index.mjs';
 
 Deno.test('rate limiting through Deno.serve — allow then block', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     const limiter = rateLimit({ limit: 2, windowMs: 60_000, store });
     const ac = new AbortController();
 
@@ -41,7 +41,7 @@ Deno.test('rate limiting through Deno.serve — allow then block', async () => {
 });
 
 Deno.test('429 response includes correct rate limit headers', async () => {
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     const limiter = rateLimit({ limit: 1, windowMs: 60_000, store });
     const ac = new AbortController();
 
@@ -81,7 +81,7 @@ Deno.test('429 response includes correct rate limit headers', async () => {
 Deno.test('concurrent request burst', async () => {
     const limit = 5;
     const burst = 10;
-    const store = new MemoryStore(60_000);
+    const store = new MemoryStore();
     const limiter = rateLimit({ limit, windowMs: 60_000, store });
     const ac = new AbortController();
 

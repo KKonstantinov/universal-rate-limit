@@ -3,7 +3,17 @@ import fp from 'fastify-plugin';
 import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStore,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Fastify plugin adapter. */
 export type FastifyRateLimitOptions = RateLimitOptions<FastifyRequest>;
