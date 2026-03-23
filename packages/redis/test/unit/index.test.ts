@@ -270,10 +270,29 @@ function createMockRedis(): {
         const remaining = Math.max(0, limit - totalHits);
         const resetTime = windowStart + windowMs;
 
-        // Compute retryAfterMs (simplified)
+        // Compute retryAfterMs (matches core sliding-window logic)
         let retryAfterMs = 0;
         if (limited) {
-            retryAfterMs = Math.max(0, resetTime - nowMs);
+            const threshold = limit - 1 - currentHits;
+            if (previousHits > 0 && threshold >= 0) {
+                const targetWeight = threshold / previousHits;
+                if (targetWeight >= 1) {
+                    retryAfterMs = 0;
+                } else {
+                    const targetElapsed = windowMs * (1 - targetWeight);
+                    retryAfterMs = Math.max(0, windowStart + targetElapsed - nowMs);
+                }
+            } else if (currentHits === 0) {
+                retryAfterMs = 0;
+            } else {
+                const targetNewWeight = (limit - 1) / currentHits;
+                if (targetNewWeight >= 1) {
+                    retryAfterMs = Math.max(0, resetTime - nowMs);
+                } else {
+                    const targetElapsedNew = windowMs * (1 - targetNewWeight);
+                    retryAfterMs = Math.max(0, resetTime + targetElapsedNew - nowMs);
+                }
+            }
         }
 
         // Store state

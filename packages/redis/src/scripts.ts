@@ -146,7 +146,28 @@ local resetTime = windowStart + windowMs
 
 local retryAfterMs = 0
 if limited == 1 then
-    retryAfterMs = math.max(0, resetTime - nowMs)
+    local threshold = limit - 1 - curr
+    if prev > 0 and threshold >= 0 then
+        local targetWeight = threshold / prev
+        if targetWeight >= 1 then
+            retryAfterMs = 0
+        else
+            local targetElapsed = windowMs * (1 - targetWeight)
+            retryAfterMs = math.max(0, windowStart + targetElapsed - nowMs)
+        end
+    else
+        if curr == 0 then
+            retryAfterMs = 0
+        else
+            local targetNewWeight = (limit - 1) / curr
+            if targetNewWeight >= 1 then
+                retryAfterMs = math.max(0, resetTime - nowMs)
+            else
+                local targetElapsedNew = windowMs * (1 - targetNewWeight)
+                retryAfterMs = math.max(0, resetTime + targetElapsedNew - nowMs)
+            end
+        end
+    end
 end
 
 return {limited, remaining, resetTime, retryAfterMs}
