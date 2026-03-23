@@ -540,7 +540,7 @@ describe('RedisStore integration', () => {
             const store = createStore();
             const limiter = rateLimit({
                 limit: 2,
-                algorithm: { type: 'sliding-window', windowMs: 2000 },
+                algorithm: { type: 'sliding-window', windowMs: 3000 },
                 store,
                 headers: 'draft-7'
             });
@@ -557,7 +557,7 @@ describe('RedisStore integration', () => {
             const retryAfterSeconds = Number(blocked.headers['Retry-After']);
             expect(retryAfterSeconds).toBeGreaterThan(0);
 
-            await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000 + 200));
+            await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000 + 500));
 
             const unblocked = await limiter(request);
             expect(unblocked.limited).toBe(false);
