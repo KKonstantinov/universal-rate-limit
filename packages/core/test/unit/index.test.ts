@@ -1267,22 +1267,64 @@ describe('hardened interfaces', () => {
     // ── 5. Cost-based consumption ────────────────────────────────────────
 
     describe('cost-based consumption', () => {
-        describe('token bucket with cost', () => {
-            it('cost=2 deducts 2 tokens from the bucket', async () => {
+        describe('cost option on rateLimit()', () => {
+            it('static cost=2 deducts 2 units per request', async () => {
                 const limiter = rateLimit({
                     limit: 10,
+                    cost: 2,
                     algorithm: { type: 'token-bucket', refillRate: 10 }
                 });
                 const req = createRequest();
 
-                // First request with cost=1 (default) — uses 1 token
                 const r1 = await limiter(req);
-                expect(r1.remaining).toBe(9);
+                expect(r1.remaining).toBe(8); // 10 - 2 = 8
 
-                // TODO: When cost parameter is available on the limiter/store,
-                // a cost=2 request should deduct 2 tokens
+                const r2 = await limiter(req);
+                expect(r2.remaining).toBe(6); // 8 - 2 = 6
             });
 
+            it('cost function resolves per-request', async () => {
+                const limiter = rateLimit({
+                    limit: 10,
+                    cost: (req: Request) => (req.headers.get('x-cost') ? Number(req.headers.get('x-cost')) : 1),
+                    algorithm: { type: 'fixed-window', windowMs: 60_000 }
+                });
+
+                const r1 = await limiter(createRequest());
+                expect(r1.remaining).toBe(9); // default cost=1
+
+                const expensiveReq = new Request('http://localhost/', {
+                    headers: { 'x-forwarded-for': '1.2.3.4', 'x-cost': '3' }
+                });
+                const r2 = await limiter(expensiveReq);
+                expect(r2.remaining).toBe(6); // 9 - 3 = 6
+            });
+
+            it('async cost function resolves per-request', async () => {
+                const limiter = rateLimit({
+                    limit: 10,
+                    cost: async () => 5,
+                    algorithm: { type: 'fixed-window', windowMs: 60_000 }
+                });
+
+                const r1 = await limiter(createRequest());
+                expect(r1.remaining).toBe(5); // 10 - 5 = 5
+            });
+
+            it('cost=0 does not consume capacity', async () => {
+                const limiter = rateLimit({
+                    limit: 10,
+                    cost: 0,
+                    algorithm: { type: 'fixed-window', windowMs: 60_000 }
+                });
+
+                const r1 = await limiter(createRequest());
+                expect(r1.remaining).toBe(10);
+                expect(r1.limited).toBe(false);
+            });
+        });
+
+        describe('token bucket with cost', () => {
             it('cost=2 deducts 2 tokens at algorithm level', () => {
                 const algo = tokenBucket({ refillRate: 10 });
 
@@ -1315,6 +1357,16 @@ describe('hardened interfaces', () => {
                 const algo = tokenBucket({ refillRate: 10 });
                 const { result: r1 } = algo.consume(undefined, 10, 5000);
                 expect(r1.remaining).toBe(9); // limit(10) - cost(1) = 9
+            });
+
+            it('blocks first request when cost exceeds capacity', () => {
+                const algo = tokenBucket({ refillRate: 10 });
+                const { next, result } = algo.consume(undefined, 5, 5000, 10);
+                expect(result.limited).toBe(true);
+                expect(result.remaining).toBe(0);
+                expect(result.retryAfterMs).toBeGreaterThan(0);
+                // State should preserve full bucket (nothing was consumed)
+                expect(next.tokens).toBe(5);
             });
         });
 

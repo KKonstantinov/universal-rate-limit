@@ -9,10 +9,9 @@ export type {
     ConsumeResult,
     Algorithm,
     AlgorithmConfig,
-    MemoryStore,
     MemoryStoreOptions
 } from 'universal-rate-limit';
-export { fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
+export { MemoryStore, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Express middleware adapter. */
 export type ExpressRateLimitOptions = RateLimitOptions<ExpressRequest>;

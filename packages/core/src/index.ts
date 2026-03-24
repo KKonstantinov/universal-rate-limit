@@ -238,6 +238,12 @@ export interface RateLimitOptions<TRequest = Request> {
      * @default false
      */
     passOnStoreError?: boolean;
+    /**
+     * Number of units to consume per request. Can be a static number or an
+     * async function that resolves per-request (useful for weighted endpoints).
+     * @default 1
+     */
+    cost?: number | ((request: TRequest) => number | Promise<number>);
 }
 
 /** The outcome of evaluating a request against the rate limiter. */
@@ -284,6 +290,26 @@ function defaultKeyGenerator(request: Request): string {
 
 /**
  * Build RateLimit response headers according to the specified IETF draft version.
+ *
+ * - **draft-7** (default): Emits a combined `RateLimit` header with `limit`, `remaining`, and `reset`
+ *   fields, plus a `RateLimit-Policy` header (RFC 9110 §15.5.29).
+ * - **draft-6**: Emits separate `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
+ *
+ * When `limited` is `true`, a `Retry-After` header (delay-seconds, per RFC 9110 §10.2.3) is included.
+ * When `legacyHeaders` is `true`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
+ * `X-RateLimit-Reset` headers are added alongside the standard headers.
+ *
+ * @param version - IETF draft version controlling header format.
+ * @param limit - Maximum number of requests allowed in the window.
+ * @param remaining - Requests remaining before the limit is reached.
+ * @param resetTimeMs - Timestamp (ms since epoch) when the current window resets.
+ * @param nowMs - Current timestamp (ms since epoch), used to compute `reset` as a delta.
+ * @param windowSeconds - Window duration in seconds, used to build the `w=` policy parameter.
+ * @param legacyHeaders - Whether to include `X-RateLimit-*` headers.
+ * @param limited - Whether the current request has been rate-limited (triggers `Retry-After`).
+ * @param retryAfterSeconds - Seconds the client should wait before retrying.
+ * @param policyHeader - Optional override for the `RateLimit-Policy` header value (draft-7 only).
+ * @returns A record of header name–value pairs ready to be set on the response.
  */
 function generateHeaders(
     version: HeadersVersion,
@@ -408,6 +434,18 @@ interface SlidingWindowState {
 export function slidingWindow(options: { windowMs: number }): Algorithm<SlidingWindowState> {
     const { windowMs } = options;
 
+    /**
+     * Compute the effective hit count by blending the previous and current windows.
+     *
+     * The formula is: `ceil(previousHits * weight + currentHits)`
+     *
+     * `weight` decays linearly from 1 → 0 as time progresses through the current window:
+     *   `weight = 1 - elapsed / windowMs`
+     *
+     * At the start of the window (`elapsed = 0`), previous hits count fully.
+     * At the end (`elapsed = windowMs`), they contribute nothing.
+     * `ceil()` rounds up so we never under-count and accidentally allow an extra request.
+     */
     function computeWeightedTotal(state: SlidingWindowState, nowMs: number): number {
         if (state.previousHits === 0) return state.currentHits;
         const elapsed = nowMs - state.windowStart;
@@ -415,32 +453,57 @@ export function slidingWindow(options: { windowMs: number }): Algorithm<SlidingW
         return Math.ceil(state.previousHits * weight + state.currentHits);
     }
 
+    /**
+     * Calculate how long a limited client must wait before a retry (cost=1) would succeed.
+     *
+     * We need to find the earliest time `t` where:
+     *   `ceil(prevHits(t) * weight(t) + currentHits(t) + 1) <= limit`
+     *
+     * The +1 accounts for the retry request itself adding a hit.
+     *
+     * **Case 1 — Recovery within the current window (previous hits decay enough):**
+     *   The previous window's contribution decays as `prevHits * (1 - elapsed/windowMs)`.
+     *   We solve for when `prevHits * weight <= limit - 1 - currentHits`:
+     *     `targetWeight = (limit - 1 - currentHits) / prevHits`
+     *     `targetElapsed = windowMs * (1 - targetWeight)`
+     *   This case applies when `currentHits < limit` (there's room if previous hits shrink).
+     *
+     * **Case 2 — Recovery requires window rotation (current hits alone >= limit):**
+     *   Current hits won't shrink within this window, so we must wait for rotation,
+     *   at which point `currentHits` becomes `previousHits` in the next window and decays.
+     *   We solve for when `currentHits * weight_new + 1 <= limit` in the next window:
+     *     `targetWeight = (limit - 1) / currentHits`
+     *     `targetElapsed = windowMs * (1 - targetWeight)`
+     *     `retryAt = resetTime + targetElapsed`
+     *   If `currentHits <= limit - 1`, recovery happens immediately at rotation.
+     */
     function computeRetryAfterMs(state: SlidingWindowState, limit: number, nowMs: number): number {
         const { currentHits, previousHits, windowStart } = state;
         const resetTimeMs = windowStart + windowMs;
 
-        // The retry request will add +1 hit, so we need room for currHits + 1
-        const threshold = limit - 1 - currentHits; // prevHits * weight must be <= this
+        // Room needed: a retry adds +1 hit, so prevHits * weight must fit within this budget
+        const threshold = limit - 1 - currentHits;
 
-        // Case 1: Can we recover within the current window via previous hits decaying?
+        // Case 1: Previous hits are decaying and current hits leave room — solve within this window
         if (previousHits > 0 && threshold >= 0) {
             const targetWeight = threshold / previousHits;
-            if (targetWeight >= 1) return 0; // Already recovered
+            if (targetWeight >= 1) return 0; // Previous contribution already small enough
             const targetElapsed = windowMs * (1 - targetWeight);
             const retryAtMs = windowStart + targetElapsed;
             if (retryAtMs > nowMs) return retryAtMs - nowMs;
             return 0;
         }
 
-        // Case 2: Need to wait past resetTime for currentHits to become previous and decay.
+        // Case 2: Current hits alone fill the limit — must wait for window rotation + decay
         if (currentHits === 0) return 0;
 
         const targetNewWeight = (limit - 1) / currentHits;
         if (targetNewWeight >= 1) {
-            // Recover immediately at resetTime (hits < limit right after rotation)
+            // Current hits fit under limit after rotation — recover at resetTime
             return Math.max(0, resetTimeMs - nowMs);
         }
 
+        // Need additional decay time in the next window after rotation
         const targetElapsedNew = windowMs * (1 - targetNewWeight);
         return Math.max(0, resetTimeMs + targetElapsedNew - nowMs);
     }
@@ -450,19 +513,21 @@ export function slidingWindow(options: { windowMs: number }): Algorithm<SlidingW
         config: { windowMs },
 
         consume(state: SlidingWindowState | undefined, limit: number, nowMs: number, cost = 1) {
+            // Window rotation: windows are aligned to the first request's timestamp, not the clock.
+            // On rotation, currentHits moves to previousHits (so it can decay via weight),
+            // and currentHits resets. After 2+ windows of inactivity, all history is discarded.
             let next: SlidingWindowState;
 
             if (!state) {
-                // First request
                 next = { currentHits: cost, previousHits: 0, windowStart: nowMs };
             } else if (nowMs >= state.windowStart + windowMs * 2) {
-                // Two+ windows elapsed — previous data is too old
+                // Two+ windows elapsed — all previous data is stale
                 next = { currentHits: cost, previousHits: 0, windowStart: nowMs };
             } else if (nowMs >= state.windowStart + windowMs) {
-                // Window expired — rotate current to previous
+                // One window elapsed — rotate current → previous, advance windowStart by exactly
+                // one windowMs (not to nowMs) to keep windows aligned to the original start time
                 next = { currentHits: cost, previousHits: state.currentHits, windowStart: state.windowStart + windowMs };
             } else {
-                // Within current window
                 next = { currentHits: state.currentHits + cost, previousHits: state.previousHits, windowStart: state.windowStart };
             }
 
@@ -484,7 +549,8 @@ export function slidingWindow(options: { windowMs: number }): Algorithm<SlidingW
                 return { limited: false, remaining: limit, resetTime: new Date(nowMs + windowMs), retryAfterMs: 0 };
             }
 
-            // Apply window rotation for the peek (without modifying stored state)
+            // Simulate the same window rotation as consume(), but with currentHits: 0
+            // since peek doesn't record a hit — just observes the current weighted total
             let effective: SlidingWindowState;
             if (nowMs >= state.windowStart + windowMs * 2) {
                 effective = { currentHits: 0, previousHits: 0, windowStart: nowMs };
@@ -558,6 +624,12 @@ export function tokenBucket(options: { refillRate: number; bucketSize?: number; 
                 }
             } else {
                 // First request — bucket starts full, deduct cost
+                if (capacity < cost) {
+                    const retryAfterMs = Math.ceil((cost - capacity) / tokensPerMs);
+                    const resetTime = new Date(nowMs + Math.ceil(capacity / tokensPerMs));
+                    const next: TokenBucketState = { tokens: capacity, lastRefillMs: nowMs };
+                    return { next, result: { limited: true, remaining: 0, resetTime, retryAfterMs } };
+                }
                 tokens = capacity - cost;
             }
 
@@ -808,6 +880,7 @@ export function rateLimit<TRequest = Request>(
         throw new RangeError(`refillMs must be a positive number, got ${String(algo.config.refillMs)}`);
     }
 
+    const costOption = options.cost ?? 1;
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
     const headersVersion = options.headers ?? 'draft-7';
     const legacyHeaders = options.legacyHeaders ?? false;
@@ -879,9 +952,9 @@ export function rateLimit<TRequest = Request>(
 
     // Not async on purpose — when the store is synchronous (e.g. MemoryStore),
     // this avoids wrapping the result in a Promise and the associated microtask overhead.
-    function runConsume(key: string, limit: number, now: number): RateLimitResult | Promise<RateLimitResult> {
+    function runConsume(key: string, limit: number, now: number, cost: number): RateLimitResult | Promise<RateLimitResult> {
         try {
-            const consumeResult = store.consume(key, algo, limit);
+            const consumeResult = store.consume(key, algo, limit, cost);
             if (isPromise(consumeResult)) {
                 return consumeResult.then(
                     r => buildResult(r, limit, now),
@@ -898,7 +971,7 @@ export function rateLimit<TRequest = Request>(
         }
     }
 
-    // Async fallback for when skip/limit/key are async
+    // Async fallback for when skip/limit/key/cost are async
     async function asyncPath(request: TRequest): Promise<RateLimitResult> {
         const now = Date.now();
 
@@ -911,14 +984,15 @@ export function rateLimit<TRequest = Request>(
         }
 
         const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
+        const cost = typeof costOption === 'function' ? await costOption(request) : costOption;
         const key = await keyGenerator(request);
-        return runConsume(key, limit, now);
+        return runConsume(key, limit, now, cost);
     }
 
-    // Not async on purpose — when all inputs (key, limit, store) are synchronous,
+    // Not async on purpose — when all inputs (key, limit, cost, store) are synchronous,
     // this returns a plain RateLimitResult with no Promise/microtask overhead.
     return (request: TRequest): RateLimitResult | Promise<RateLimitResult> => {
-        // Fast path: no skip, static limit, sync keyGenerator, sync store
+        // Fast path: no skip, static limit, static cost, sync keyGenerator, sync store
         if (skip) {
             return asyncPath(request);
         }
@@ -928,17 +1002,23 @@ export function rateLimit<TRequest = Request>(
             return asyncPath(request);
         }
 
+        // Resolve cost
+        if (typeof costOption === 'function') {
+            return asyncPath(request);
+        }
+
         const now = Date.now();
         const limit = limitOption;
+        const cost = costOption;
 
         // Resolve key
         const key = keyGenerator(request);
         if (isPromise(key)) {
-            return key.then(k => runConsume(k, limit, now));
+            return key.then(k => runConsume(k, limit, now, cost));
         }
 
         // Consume and build result — fully synchronous when store is sync
-        return runConsume(key, limit, now);
+        return runConsume(key, limit, now, cost);
     };
 }
 
