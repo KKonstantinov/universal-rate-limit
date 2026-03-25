@@ -1,5 +1,21 @@
 # @universal-rate-limit/redis
 
+## 2.0.0
+
+### Major Changes
+
+- [#8](https://github.com/KKonstantinov/universal-rate-limit/pull/8) [`24eedb1`](https://github.com/KKonstantinov/universal-rate-limit/commit/24eedb16cc076a316d26669a37b528944bb024e0) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - BREAKING CHANGE: Algorithm/store
+  separation and new `Store` interface.
+
+    The core library now separates algorithms (`fixedWindow`, `slidingWindow`, `tokenBucket`) from stores (`MemoryStore`, `RedisStore`). The `Store` interface changed from `increment()`/`decrement()` to `consume()`/`peek()`/`unconsume()`, accepting an `Algorithm` instance.
+
+    All middleware packages and the Redis store have been updated to work with the new architecture. Existing `store` configurations using the old `Store` interface will need to be updated.
+
+### Patch Changes
+
+- Updated dependencies [[`24eedb1`](https://github.com/KKonstantinov/universal-rate-limit/commit/24eedb16cc076a316d26669a37b528944bb024e0)]:
+    - universal-rate-limit@2.0.0
+
 ## 1.1.0
 
 ### Minor Changes
