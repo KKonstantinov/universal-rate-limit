@@ -1,8 +1,15 @@
-# @universal-rate-limit/redis
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/packages/redis/universal-rate-limit-redis.png" alt="@universal-rate-limit/redis" />
+</p>
 
-[![npm version](https://img.shields.io/npm/v/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis) [![npm downloads](https://img.shields.io/npm/dm/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis)
-[![types](https://img.shields.io/npm/types/@universal-rate-limit/redis.svg)](https://www.npmjs.com/package/@universal-rate-limit/redis)
-[![license](https://img.shields.io/npm/l/@universal-rate-limit/redis.svg)](https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE)
+<h1 align="center">@universal-rate-limit/redis</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@universal-rate-limit/redis"><img src="https://img.shields.io/npm/v/@universal-rate-limit/redis.svg" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@universal-rate-limit/redis"><img src="https://img.shields.io/npm/dm/@universal-rate-limit/redis.svg" alt="npm downloads" /></a>
+  <a href="https://www.npmjs.com/package/@universal-rate-limit/redis"><img src="https://img.shields.io/npm/types/@universal-rate-limit/redis.svg" alt="types" /></a>
+  <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@universal-rate-limit/redis.svg" alt="license" /></a>
+</p>
 
 Redis store for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit). Uses atomic Lua scripts to prevent race conditions — works with any Redis client library.
 
