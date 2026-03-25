@@ -17,7 +17,7 @@ const app = express();
 // Apply to all routes
 app.use(
     expressRateLimit({
-        windowMs: 60_000,
+        algorithm: { type: 'sliding-window', windowMs: 60_000 },
         limit: 60
     })
 );
@@ -26,7 +26,7 @@ app.use(
 app.use(
     '/api/',
     expressRateLimit({
-        windowMs: 15 * 60_000,
+        algorithm: { type: 'sliding-window', windowMs: 15 * 60_000 },
         limit: 100
     })
 );
@@ -48,7 +48,7 @@ const fastify = Fastify();
 
 // Register as a plugin
 await fastify.register(fastifyRateLimit, {
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60
 });
 ```
@@ -70,7 +70,7 @@ const app = new Hono();
 // Apply to all routes
 app.use(
     honoRateLimit({
-        windowMs: 60_000,
+        algorithm: { type: 'sliding-window', windowMs: 60_000 },
         limit: 60
     })
 );
@@ -79,9 +79,8 @@ app.use(
 app.use(
     '/api/*',
     honoRateLimit({
-        windowMs: 15 * 60_000,
-        limit: 100,
-        algorithm: 'sliding-window'
+        algorithm: { type: 'sliding-window', windowMs: 15 * 60_000 },
+        limit: 100
     })
 );
 ```
@@ -107,7 +106,7 @@ async function handler(request: Request) {
 }
 
 export const GET = withRateLimit(handler, {
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60
 });
 ```
@@ -122,7 +121,7 @@ import { nextjsRateLimit } from '@universal-rate-limit/nextjs';
 import { NextResponse } from 'next/server';
 
 const limiter = nextjsRateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 100
 });
 

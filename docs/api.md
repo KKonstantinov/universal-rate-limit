@@ -13,19 +13,20 @@ const result: RateLimitResult = await limiter(request);
 
 **Parameters:**
 
-| Option         | Type                                                                                      | Default                | Description                 |
-| -------------- | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------------- |
-| `windowMs`     | `number`                                                                                  | `60_000`               | Time window in milliseconds |
-| `limit`        | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window |
-| `algorithm`    | `'fixed-window' \| 'sliding-window'`                                                      | `'fixed-window'`       | Rate limiting algorithm     |
-| `headers`      | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version        |
-| `store`        | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend             |
-| `keyGenerator` | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier   |
-| `skip`         | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting          |
-| `handler`      | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler     |
-| `message`      | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body               |
-| `statusCode`   | `number`                                                                                  | `429`                  | HTTP status code            |
-| `failOpen`     | `boolean`                                                                                 | `false`                | Fail open on store errors   |
+| Option          | Type                                                                                      | Default                | Description                    |
+| --------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------ |
+| `limit`         | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window    |
+| `algorithm`     | `AlgorithmConfig \| Algorithm`                                                            | sliding-window (60s)   | Rate limiting algorithm        |
+| `cost`          | `number \| (req: Request) => number \| Promise<number>`                                   | `1`                    | Units to consume per request   |
+| `headers`       | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version           |
+| `legacyHeaders` | `boolean`                                                                                 | `false`                | Include X-RateLimit-\* headers |
+| `store`         | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend                |
+| `keyGenerator`  | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier      |
+| `skip`          | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting             |
+| `handler`       | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler        |
+| `message`       | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body                  |
+| `statusCode`    | `number`                                                                                  | `429`                  | HTTP status code               |
+| `failOpen`      | `boolean`                                                                                 | `false`                | Fail open on store errors      |
 
 **Returns:** `(request: Request) => Promise<RateLimitResult>`
 
@@ -85,30 +86,31 @@ const response = await buildRateLimitResponse(request, result, {
 
 ## `MemoryStore`
 
-In-memory store implementation with dual-map design for efficient sliding-window support.
+In-memory store implementation backed by a single `Map`, supporting all built-in algorithms.
 
 ```ts
 import { MemoryStore } from 'universal-rate-limit';
 
-const store = new MemoryStore(windowMs, algorithm);
+const store = new MemoryStore({ prefix: 'my-app:', cleanupIntervalMs: 30_000 });
 ```
 
 **Constructor:**
 
-| Parameter   | Type                                 | Description                     |
-| ----------- | ------------------------------------ | ------------------------------- |
-| `windowMs`  | `number`                             | Window duration in milliseconds |
-| `algorithm` | `'fixed-window' \| 'sliding-window'` | Algorithm to use                |
+| Parameter                   | Type     | Default     | Description                 |
+| --------------------------- | -------- | ----------- | --------------------------- |
+| `options.prefix`            | `string` | `undefined` | Key prefix                  |
+| `options.cleanupIntervalMs` | `number` | `60_000`    | Background cleanup interval |
 
 **Methods:**
 
-| Method           | Description                                           |
-| ---------------- | ----------------------------------------------------- |
-| `increment(key)` | Increment counter, returns `Promise<IncrementResult>` |
-| `decrement(key)` | Decrement counter                                     |
-| `resetKey(key)`  | Reset a single key                                    |
-| `resetAll()`     | Clear all entries                                     |
-| `shutdown()`     | Stop the cleanup timer                                |
+| Method                                    | Description                               |
+| ----------------------------------------- | ----------------------------------------- |
+| `consume(key, algorithm, limit, cost?)`   | Consume capacity, returns `ConsumeResult` |
+| `peek(key, algorithm, limit)`             | Peek without consuming                    |
+| `unconsume(key, algorithm, limit, cost?)` | Restore consumed capacity                 |
+| `resetKey(key)`                           | Reset a single key                        |
+| `resetAll()`                              | Clear all entries                         |
+| `shutdown()`                              | Stop the cleanup timer                    |
 
 ---
 
@@ -134,12 +136,12 @@ const store = new RedisStore({
 
 **Methods:**
 
-| Method           | Description                                           |
-| ---------------- | ----------------------------------------------------- |
-| `increment(key)` | Increment counter, returns `Promise<IncrementResult>` |
-| `decrement(key)` | Decrement counter                                     |
-| `resetKey(key)`  | Reset a single key                                    |
-| `resetAll()`     | Clear all prefixed keys via `SCAN` + `DEL`            |
+| Method                                  | Description                                        |
+| --------------------------------------- | -------------------------------------------------- |
+| `consume(key, algorithm, limit, cost?)` | Consume capacity, returns `Promise<ConsumeResult>` |
+| `peek(key, algorithm, limit)`           | Peek without consuming                             |
+| `resetKey(key)`                         | Reset a single key                                 |
+| `resetAll()`                            | Clear all prefixed keys via `SCAN` + `DEL`         |
 
 ---
 
@@ -149,15 +151,20 @@ Implement this interface for custom storage backends.
 
 ```ts
 interface Store {
-    increment(key: string): Promise<IncrementResult>;
-    decrement(key: string): Promise<void>;
-    resetKey(key: string): Promise<void>;
-    resetAll(): Promise<void>;
+    prefix?: string;
+    consume(key: string, algorithm: Algorithm, limit: number, cost?: number): MaybePromise<ConsumeResult>;
+    peek?(key: string, algorithm: Algorithm, limit: number): MaybePromise<ConsumeResult | undefined>;
+    unconsume?(key: string, algorithm: Algorithm, limit: number, cost?: number): MaybePromise<void>;
+    resetKey(key: string): MaybePromise<void>;
+    resetAll(): MaybePromise<void>;
+    shutdown?(): MaybePromise<void>;
 }
 
-interface IncrementResult {
-    totalHits: number;
+interface ConsumeResult {
+    limited: boolean;
+    remaining: number;
     resetTime: Date;
+    retryAfterMs: number;
 }
 ```
 
@@ -166,7 +173,8 @@ interface IncrementResult {
 ## Types
 
 ```ts
-type Algorithm = 'fixed-window' | 'sliding-window';
+type AlgorithmConfig = { type: 'fixed-window'; windowMs: number } | { type: 'sliding-window'; windowMs: number } | { type: 'token-bucket'; refillRate: number; bucketSize?: number; refillMs?: number };
+
 type HeadersVersion = 'draft-6' | 'draft-7';
 ```
 
@@ -180,7 +188,7 @@ type HeadersVersion = 'draft-6' | 'draft-7';
 import { RedisStore } from '@universal-rate-limit/redis';
 ```
 
-`RedisStore` — Client-agnostic Redis store. Also re-exports `Store` and `IncrementResult` from core.
+`RedisStore` — Client-agnostic Redis store. Also re-exports `Store` and `ConsumeResult` from core.
 
 ---
 
@@ -219,4 +227,4 @@ import { withRateLimit, nextjsRateLimit } from '@universal-rate-limit/nextjs';
 - `withRateLimit(handler, options?)` — Wraps a Next.js App Router handler with rate limiting.
 - `nextjsRateLimit(options?)` — Creates a limiter for Edge Middleware use.
 
-All middleware packages also re-export: `RateLimitOptions`, `RateLimitResult`, `Store`, `IncrementResult`, `MemoryStore`.
+All middleware packages also re-export: `RateLimitOptions`, `RateLimitResult`, `Store`, `ConsumeResult`, `MemoryStore`.

@@ -12,7 +12,7 @@ import Fastify from 'fastify';
 import { fastifyRateLimit } from '@universal-rate-limit/fastify';
 
 const app = Fastify();
-await app.register(fastifyRateLimit, { windowMs: 60_000, limit: 5 });
+await app.register(fastifyRateLimit, { algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 5 });
 
 app.get('/', async () => {
     return { message: 'Hello from Fastify!' };

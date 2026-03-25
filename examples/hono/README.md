@@ -12,7 +12,7 @@ import { Hono } from 'hono';
 import { honoRateLimit } from '@universal-rate-limit/hono';
 
 const app = new Hono();
-app.use(honoRateLimit({ windowMs: 60_000, limit: 5 }));
+app.use(honoRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 5 }));
 
 app.get('/', c => {
     return c.json({ message: 'Hello from Hono!' });

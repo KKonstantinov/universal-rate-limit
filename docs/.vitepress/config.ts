@@ -33,7 +33,7 @@ export default defineConfig({
         nav: [
             { text: 'Guide', link: '/getting-started' },
             { text: 'API', link: '/api' },
-            { text: 'Playground', link: 'https://universal-rate-limit-playground.vercel.app' },
+            { text: 'Playground', link: 'https://universal-rate-limit-playground.vercel.app', target: '_blank' },
             {
                 text: 'Packages',
                 items: [

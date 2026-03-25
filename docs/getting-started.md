@@ -1,5 +1,7 @@
 # Getting Started
 
+Want to try it first? **[Open the playground](https://universal-rate-limit-playground.vercel.app)** to experiment with rate limiting right in your browser.
+
 ## Installation
 
 Install the core package:
@@ -38,7 +40,7 @@ The `rateLimit` function creates a limiter that accepts a Web Standard `Request`
 import { rateLimit } from 'universal-rate-limit';
 
 const limiter = rateLimit({
-    windowMs: 60_000, // 1 minute window
+    algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute window
     limit: 60 // 60 requests per window
 });
 
@@ -59,29 +61,68 @@ if (result.limited) {
 
 All options are optional with sensible defaults:
 
-| Option         | Type                                 | Default               | Description                                            |
-| -------------- | ------------------------------------ | --------------------- | ------------------------------------------------------ |
-| `windowMs`     | `number`                             | `60_000`              | Time window in milliseconds                            |
-| `limit`        | `number \| (req) => number`          | `60`                  | Max requests per window (can be async)                 |
-| `algorithm`    | `'fixed-window' \| 'sliding-window'` | `'fixed-window'`      | Rate limiting algorithm                                |
-| `headers`      | `'draft-7' \| 'draft-6'`             | `'draft-7'`           | IETF rate limit headers version                        |
-| `store`        | `Store`                              | `MemoryStore`         | Storage backend ([Redis](/stores#redis-store), custom) |
-| `keyGenerator` | `(req) => string`                    | IP-based              | Extract client identifier                              |
-| `skip`         | `(req) => boolean`                   | `undefined`           | Skip rate limiting for certain requests                |
-| `handler`      | `(req, result) => Response`          | `undefined`           | Custom 429 response handler                            |
-| `message`      | `string \| object \| function`       | `'Too Many Requests'` | Response body when limited                             |
-| `statusCode`   | `number`                             | `429`                 | HTTP status code when limited                          |
-| `failOpen`     | `boolean`                            | `false`               | Fail open if the store errors                          |
+| Option          | Type                           | Default               | Description                                            |
+| --------------- | ------------------------------ | --------------------- | ------------------------------------------------------ |
+| `limit`         | `number \| (req) => number`    | `60`                  | Max requests per window (can be async)                 |
+| `algorithm`     | `AlgorithmConfig \| Algorithm` | sliding-window (60s)  | Rate limiting algorithm (config object or instance)    |
+| `cost`          | `number \| (req) => number`    | `1`                   | Units to consume per request (can be async)            |
+| `headers`       | `'draft-7' \| 'draft-6'`       | `'draft-7'`           | IETF rate limit headers version                        |
+| `legacyHeaders` | `boolean`                      | `false`               | Include `X-RateLimit-*` headers                        |
+| `store`         | `Store`                        | `MemoryStore`         | Storage backend ([Redis](/stores#redis-store), custom) |
+| `keyGenerator`  | `(req) => string`              | IP-based              | Extract client identifier                              |
+| `skip`          | `(req) => boolean`             | `undefined`           | Skip rate limiting for certain requests                |
+| `handler`       | `(req, result) => Response`    | `undefined`           | Custom 429 response handler                            |
+| `message`       | `string \| object \| function` | `'Too Many Requests'` | Response body when limited                             |
+| `statusCode`    | `number`                       | `429`                 | HTTP status code when limited                          |
+| `failOpen`      | `boolean`                      | `false`               | Fail open if the store errors                          |
 
-## Sliding Window
+## Algorithms
+
+### Sliding Window
 
 The sliding-window algorithm provides smoother rate limiting by weighting the previous window's hits:
 
 ```ts
+import { rateLimit, slidingWindow } from 'universal-rate-limit';
+
 const limiter = rateLimit({
-    windowMs: 60_000,
-    limit: 100,
-    algorithm: 'sliding-window'
+    algorithm: slidingWindow({ windowMs: 60_000 }),
+    limit: 100
+});
+```
+
+### Fixed Window
+
+The fixed-window algorithm uses a simple counter that resets at each window boundary:
+
+```ts
+import { rateLimit, fixedWindow } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    algorithm: fixedWindow({ windowMs: 60_000 }),
+    limit: 100
+});
+```
+
+### Token Bucket
+
+The token-bucket algorithm allows steady-rate traffic with burst capacity:
+
+```ts
+import { rateLimit, tokenBucket } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    algorithm: tokenBucket({ refillRate: 10, bucketSize: 100 }),
+    limit: 100
+});
+```
+
+You can also use config objects instead of factory functions:
+
+```ts
+const limiter = rateLimit({
+    algorithm: { type: 'token-bucket', refillRate: 10, bucketSize: 100 },
+    limit: 100
 });
 ```
 
