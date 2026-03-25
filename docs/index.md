@@ -29,8 +29,8 @@ features:
       title: Framework Middleware
       details: Drop-in support for Express, Fastify, Hono, and Next.js with framework-native APIs.
     - icon: 📊
-      title: Sliding Window
-      details: Choose between fixed-window and sliding-window algorithms for smoother rate limiting.
+      title: Multiple Algorithms
+      details: Choose between fixed-window, sliding-window, and token-bucket algorithms to match your use case.
     - icon: 📋
       title: IETF Headers
       details: Draft-6 and draft-7 rate limit headers plus Retry-After (RFC 9110) with zero configuration.
@@ -49,7 +49,7 @@ npm install universal-rate-limit
 import { rateLimit } from 'universal-rate-limit';
 
 const limiter = rateLimit({
-    windowMs: 60_000, // 1 minute
+    algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
     limit: 60 // 60 requests per window
 });
 
@@ -70,11 +70,11 @@ Rate limit any framework with a single line:
 ```ts
 // Express
 import { expressRateLimit } from '@universal-rate-limit/express';
-app.use(expressRateLimit({ windowMs: 60_000, limit: 60 }));
+app.use(expressRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
 
 // Hono
 import { honoRateLimit } from '@universal-rate-limit/hono';
-app.use(honoRateLimit({ windowMs: 60_000, limit: 60 }));
+app.use(honoRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
 ```
 
 ## Redis Store
@@ -86,11 +86,10 @@ import { rateLimit } from 'universal-rate-limit';
 import { RedisStore } from '@universal-rate-limit/redis';
 
 const limiter = rateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60,
     store: new RedisStore({
-        sendCommand: (...args) => redis.call(...args),
-        windowMs: 60_000
+        sendCommand: (...args) => redis.call(...args)
     })
 });
 ```

@@ -5,39 +5,46 @@ The rate limiter uses a pluggable store interface to track request counts. A `Me
 ## Store Interface
 
 ```ts
-interface IncrementResult {
-    totalHits: number;
+interface ConsumeResult {
+    limited: boolean;
+    remaining: number;
     resetTime: Date;
+    retryAfterMs: number;
 }
 
 interface Store {
-    increment(key: string): Promise<IncrementResult>;
-    decrement(key: string): Promise<void>;
-    resetKey(key: string): Promise<void>;
-    resetAll(): Promise<void>;
+    prefix?: string;
+    consume(key: string, algorithm: Algorithm, limit: number, cost?: number): MaybePromise<ConsumeResult>;
+    peek?(key: string, algorithm: Algorithm, limit: number): MaybePromise<ConsumeResult | undefined>;
+    unconsume?(key: string, algorithm: Algorithm, limit: number, cost?: number): MaybePromise<void>;
+    resetKey(key: string): MaybePromise<void>;
+    resetAll(): MaybePromise<void>;
+    shutdown?(): MaybePromise<void>;
 }
 ```
 
 ### Methods
 
-| Method           | Description                                                               |
-| ---------------- | ------------------------------------------------------------------------- |
-| `increment(key)` | Increment the hit counter for `key`. Returns `totalHits` and `resetTime`. |
-| `decrement(key)` | Decrement the hit counter (e.g., after a successful skip).                |
-| `resetKey(key)`  | Reset the counter for a single key.                                       |
-| `resetAll()`     | Clear all counters.                                                       |
+| Method                                                 | Description                                            |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| `consume(key, algorithm, limit, cost?)`                | Consume capacity for `key`. Returns a `ConsumeResult`. |
+| `peek(key, algorithm, limit)` _(optional)_             | Peek at current state without consuming.               |
+| `unconsume(key, algorithm, limit, cost?)` _(optional)_ | Reverse a previous `consume` by restoring capacity.    |
+| `resetKey(key)`                                        | Reset the counter for a single key.                    |
+| `resetAll()`                                           | Clear all counters.                                    |
+| `shutdown()` _(optional)_                              | Release resources (timers, connections).               |
 
 ## MemoryStore
 
-The built-in `MemoryStore` is used by default. It uses an efficient dual-map approach for both fixed-window and sliding-window algorithms.
+The built-in `MemoryStore` is used by default. It uses an efficient map-based approach for all supported algorithms (fixed-window, sliding-window, and token-bucket).
 
 ```ts
 import { rateLimit, MemoryStore } from 'universal-rate-limit';
 
 const limiter = rateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'fixed-window', windowMs: 60_000 },
     limit: 60,
-    store: new MemoryStore(60_000, 'fixed-window')
+    store: new MemoryStore({ cleanupIntervalMs: 30_000 })
 });
 ```
 
@@ -53,7 +60,7 @@ The store runs a cleanup timer every `windowMs` to remove expired entries. The t
 Call `shutdown()` to clear the cleanup timer when you're done:
 
 ```ts
-const store = new MemoryStore(60_000, 'fixed-window');
+const store = new MemoryStore();
 const limiter = rateLimit({ store });
 
 // When shutting down:
@@ -78,12 +85,11 @@ import Redis from 'ioredis';
 const redis = new Redis();
 
 const store = new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(...args),
-    windowMs: 60_000
+    sendCommand: (...args: string[]) => redis.call(...args)
 });
 
 const limiter = rateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 100,
     store
 });
@@ -99,8 +105,7 @@ const client = createClient();
 await client.connect();
 
 const store = new RedisStore({
-    sendCommand: (...args: string[]) => client.sendCommand(args),
-    windowMs: 60_000
+    sendCommand: (...args: string[]) => client.sendCommand(args)
 });
 ```
 
@@ -113,7 +118,7 @@ const store = new RedisStore({
 
 ### How It Works
 
-- **Atomic increments** use Lua scripts (`EVALSHA`) so the hit count and TTL are always consistent.
+- **Atomic operations** use Lua scripts (`EVALSHA`) so the hit count and TTL are always consistent.
 - **NOSCRIPT recovery** — if the Redis script cache is flushed (e.g., after a restart), the store automatically reloads the script and retries.
 - **Non-blocking `resetAll()`** uses `SCAN` + `DEL` instead of `KEYS` to avoid blocking Redis.
 - **Zero Redis client dependencies** — works with ioredis, node-redis, or any client that can send raw commands.
@@ -123,16 +128,12 @@ const store = new RedisStore({
 Implement the `Store` interface to use Durable Objects, KV, or any other backend:
 
 ```ts
-import type { Store, IncrementResult } from 'universal-rate-limit';
+import type { Store, ConsumeResult, Algorithm, MaybePromise } from 'universal-rate-limit';
 
 class MyStore implements Store {
-    async increment(key: string): Promise<IncrementResult> {
+    async consume(key: string, algorithm: Algorithm, limit: number, cost?: number): Promise<ConsumeResult> {
         // Your implementation
-        return { totalHits: 1, resetTime: new Date(Date.now() + 60_000) };
-    }
-
-    async decrement(key: string): Promise<void> {
-        // Your implementation
+        return { limited: false, remaining: limit - 1, resetTime: new Date(Date.now() + 60_000), retryAfterMs: 0 };
     }
 
     async resetKey(key: string): Promise<void> {
@@ -151,7 +152,7 @@ If the store throws an error, the rate limiter will re-throw by default. Set `fa
 
 ```ts
 const limiter = rateLimit({
-    store: new RedisStore(redis, 60_000),
+    store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
     failOpen: true // Allow requests if Redis is down
 });
 ```

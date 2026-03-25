@@ -15,7 +15,7 @@ async function handler() {
 }
 
 export const GET = withRateLimit(handler, {
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 5
 });
 ```

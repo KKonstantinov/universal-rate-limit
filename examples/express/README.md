@@ -12,7 +12,7 @@ import express from 'express';
 import { expressRateLimit } from '@universal-rate-limit/express';
 
 const app = express();
-app.use(expressRateLimit({ windowMs: 60_000, limit: 5 }));
+app.use(expressRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 5 }));
 
 app.get('/', (req, res) => {
     res.json({ message: 'Hello from Express!' });

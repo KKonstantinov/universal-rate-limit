@@ -11,8 +11,8 @@
   <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@universal-rate-limit/hono.svg" alt="license" /></a>
 </p>
 
-Hono middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your own), and IETF-compliant rate
-limit headers out of the box. Works on Node.js, Bun, Deno, Cloudflare Workers, and other edge runtimes.
+Hono middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window, sliding-window, and token-bucket algorithms, pluggable stores (memory, Redis, or your own), and
+IETF-compliant rate limit headers out of the box. Works on Node.js, Bun, Deno, Cloudflare Workers, and other edge runtimes.
 
 ## Install
 
@@ -31,7 +31,7 @@ const app = new Hono();
 // Apply to all routes
 app.use(
     honoRateLimit({
-        windowMs: 60_000, // 1 minute
+        algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
         limit: 60 // 60 requests per window
     })
 );
@@ -40,7 +40,7 @@ app.use(
 app.use(
     '/api/*',
     honoRateLimit({
-        windowMs: 60_000,
+        algorithm: { type: 'sliding-window', windowMs: 60_000 },
         limit: 30
     })
 );
@@ -50,7 +50,7 @@ export default app;
 
 ## Options
 
-Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `windowMs`, `limit`, `algorithm`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, and `failOpen`.
+Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, and `failOpen`.
 
 ## Example
 

@@ -11,8 +11,8 @@
   <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@universal-rate-limit/nextjs.svg" alt="license" /></a>
 </p>
 
-Next.js App Router wrapper and Edge middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window and sliding-window algorithms, pluggable stores (memory, Redis, or your
-own), and IETF-compliant rate limit headers out of the box.
+Next.js App Router wrapper and Edge middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window, sliding-window, and token-bucket algorithms, pluggable stores (memory,
+Redis, or your own), and IETF-compliant rate limit headers out of the box.
 
 ## Install
 
@@ -35,7 +35,7 @@ async function handler(request: Request) {
 }
 
 export const GET = withRateLimit(handler, {
-    windowMs: 60_000, // 1 minute
+    algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
     limit: 60 // 60 requests per window
 });
 ```
@@ -50,7 +50,7 @@ import { nextjsRateLimit } from '@universal-rate-limit/nextjs';
 import { NextResponse } from 'next/server';
 
 const limiter = nextjsRateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60
 });
 
@@ -74,7 +74,7 @@ export async function middleware(request: Request) {
 
 ## Options
 
-Both `withRateLimit` and `nextjsRateLimit` accept all [core options](https://www.npmjs.com/package/universal-rate-limit) — `windowMs`, `limit`, `algorithm`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, and `failOpen`.
+Both `withRateLimit` and `nextjsRateLimit` accept all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, and `failOpen`.
 
 ## Example
 

@@ -6,7 +6,8 @@
 
 Redis store for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit). Uses atomic Lua scripts to prevent race conditions — works with any Redis client library.
 
-`universal-rate-limit` is a web-standards-based rate limiter with fixed-window and sliding-window algorithms, IETF-compliant headers, and drop-in middleware for Express, Fastify, Hono, and Next.js. This package lets you back it with Redis for multi-instance deployments.
+`universal-rate-limit` is a web-standards-based rate limiter with fixed-window, sliding-window, and token-bucket algorithms, IETF-compliant headers, and drop-in middleware for Express, Fastify, Hono, and Next.js. This package lets you back it with Redis for multi-instance
+deployments.
 
 ## Install
 
@@ -29,11 +30,10 @@ const client = createClient();
 await client.connect();
 
 const limiter = rateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60,
     store: new RedisStore({
-        sendCommand: (...args) => client.sendCommand(args),
-        windowMs: 60_000
+        sendCommand: (...args) => client.sendCommand(args)
     })
 });
 ```
@@ -48,11 +48,10 @@ import { RedisStore } from '@universal-rate-limit/redis';
 const redis = new Redis();
 
 const limiter = rateLimit({
-    windowMs: 60_000,
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60,
     store: new RedisStore({
-        sendCommand: (...args) => redis.call(args[0], ...args.slice(1)),
-        windowMs: 60_000
+        sendCommand: (...args) => redis.call(args[0], ...args.slice(1))
     })
 });
 ```

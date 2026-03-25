@@ -40,7 +40,7 @@ npm install universal-rate-limit
 import { rateLimit } from 'universal-rate-limit';
 
 const limiter = rateLimit({
-    windowMs: 60_000, // 1 minute
+    algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
     limit: 60 // 60 requests per window
 });
 
@@ -61,10 +61,11 @@ All options are optional. Defaults are shown below:
 
 ```ts
 rateLimit({
-    windowMs: 60_000, // Time window in milliseconds (default: 1 minute)
     limit: 60, // Max requests per window (number or async function)
-    algorithm: 'fixed-window', // 'fixed-window' or 'sliding-window'
+    algorithm: slidingWindow({ windowMs: 60_000 }), // Algorithm instance or config object
+    cost: 1, // Units to consume per request (number or async function)
     headers: 'draft-7', // 'draft-7' or 'draft-6'
+    legacyHeaders: false, // Include X-RateLimit-* headers
     store: new MemoryStore(), // Custom store implementation
     keyGenerator: req => ip, // Extract client identifier from request
     skip: req => false, // Skip rate limiting for certain requests
@@ -80,14 +81,11 @@ rateLimit({
 Implement the `Store` interface to use any backend:
 
 ```ts
-import type { Store, IncrementResult } from 'universal-rate-limit';
+import type { Store, ConsumeResult, Algorithm } from 'universal-rate-limit';
 
 class MyStore implements Store {
-    async increment(key: string): Promise<IncrementResult> {
-        // Increment counter and return { totalHits, resetTime }
-    }
-    async decrement(key: string): Promise<void> {
-        /* ... */
+    async consume(key: string, algorithm: Algorithm, limit: number, cost?: number): Promise<ConsumeResult> {
+        // Consume capacity and return { limited, remaining, resetTime, retryAfterMs }
     }
     async resetKey(key: string): Promise<void> {
         /* ... */
