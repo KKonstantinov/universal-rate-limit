@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/nextjs",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "description": "Next.js middleware and API route wrapper for universal-rate-limit",
     "type": "module",
     "sideEffects": false,
