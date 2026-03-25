@@ -90,7 +90,7 @@ describe('Window expiration (real timers)', () => {
 
     it('mid-window request remains limited', async () => {
         // Per-user window starts from first request; 200ms sleep is well within 60s window.
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);

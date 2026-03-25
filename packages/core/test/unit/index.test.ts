@@ -665,46 +665,11 @@ describe('rateLimit', () => {
     });
 
     describe('default algorithm', () => {
-        it('uses sliding-window when no algorithm specified', async () => {
-            vi.useFakeTimers();
-            try {
-                vi.setSystemTime(new Date('2025-01-01T00:00:00.000Z'));
-                // No algorithm, just windowMs — should use sliding-window
-                const limiter = rateLimit({ limit: 10, windowMs: 1000 });
-                const req = createRequest();
-
-                // Fill 10 hits
-                for (let i = 0; i < 10; i++) {
-                    await limiter(req);
-                }
-
-                // Just into window 2 — sliding window should still be limited
-                // (fixed-window would have reset)
-                vi.advanceTimersByTime(1001);
-                const result = await limiter(req);
-                expect(result.limited).toBe(true);
-            } finally {
-                vi.useRealTimers();
-            }
-        });
-
-        it('defaults to 60_000ms windowMs when neither algorithm nor windowMs specified', async () => {
+        it('defaults to sliding-window with 60_000ms windowMs when no algorithm specified', async () => {
             const limiter = rateLimit({ limit: 10 });
             const result = await limiter(createRequest());
 
             // Should have w=60 in policy header (60_000ms = 60s)
-            expect(result.headers['RateLimit-Policy']).toBe('10;w=60');
-        });
-
-        it('windowMs is ignored when algorithm is provided', async () => {
-            const limiter = rateLimit({
-                limit: 10,
-                windowMs: 30_000,
-                algorithm: { type: 'fixed-window', windowMs: 60_000 }
-            });
-            const result = await limiter(createRequest());
-
-            // Policy should use the algorithm's windowMs (60s), not options.windowMs (30s)
             expect(result.headers['RateLimit-Policy']).toBe('10;w=60');
         });
     });
@@ -768,7 +733,7 @@ describe('rateLimit', () => {
         it('supports async limit function', async () => {
             const limiter = rateLimit({
                 limit: async () => 2,
-                windowMs: 60_000
+                algorithm: { type: 'sliding-window', windowMs: 60_000 }
             });
 
             const req = createRequest();
@@ -881,7 +846,7 @@ describe('rateLimit', () => {
             expect(await response.text()).toBe('Custom!');
         });
 
-        it('passOnStoreError allows requests when store fails', async () => {
+        it('failOpen allows requests when store fails', async () => {
             const failingStore: Store = {
                 consume: async () => {
                     throw new Error('Store down');
@@ -892,16 +857,16 @@ describe('rateLimit', () => {
 
             const limiter = rateLimit({
                 limit: 1,
-                windowMs: 60_000,
+                algorithm: { type: 'sliding-window', windowMs: 60_000 },
                 store: failingStore,
-                passOnStoreError: true
+                failOpen: true
             });
 
             const result = await limiter(createRequest());
             expect(result.limited).toBe(false);
         });
 
-        it('throws when store fails and passOnStoreError is false', async () => {
+        it('throws when store fails and failOpen is false', async () => {
             const failingStore: Store = {
                 consume: async () => {
                     throw new Error('Store down');
@@ -912,9 +877,9 @@ describe('rateLimit', () => {
 
             const limiter = rateLimit({
                 limit: 1,
-                windowMs: 60_000,
+                algorithm: { type: 'sliding-window', windowMs: 60_000 },
                 store: failingStore,
-                passOnStoreError: false
+                failOpen: false
             });
 
             await expect(limiter(createRequest())).rejects.toThrow('Rate limit store error');
@@ -923,7 +888,7 @@ describe('rateLimit', () => {
 
     describe('headers', () => {
         it('generates draft-7 headers by default', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
             const result = await limiter(createRequest());
 
             expect(result.headers).toHaveProperty('RateLimit');
@@ -933,7 +898,7 @@ describe('rateLimit', () => {
         });
 
         it('generates draft-6 headers when configured', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6' });
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-6' });
             const result = await limiter(createRequest());
 
             expect(result.headers).toHaveProperty('RateLimit-Limit');
@@ -944,7 +909,7 @@ describe('rateLimit', () => {
         });
 
         it('includes legacy X-RateLimit headers when legacyHeaders is true', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000, legacyHeaders: true });
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, legacyHeaders: true });
             const result = await limiter(createRequest());
 
             // Standard draft-7 headers should still be present
@@ -957,7 +922,12 @@ describe('rateLimit', () => {
         });
 
         it('includes legacy headers alongside draft-6', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6', legacyHeaders: true });
+            const limiter = rateLimit({
+                limit: 10,
+                algorithm: { type: 'sliding-window', windowMs: 60_000 },
+                headers: 'draft-6',
+                legacyHeaders: true
+            });
             const result = await limiter(createRequest());
 
             // Standard draft-6 headers
@@ -969,14 +939,14 @@ describe('rateLimit', () => {
         });
 
         it('does not include legacy headers by default', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
             const result = await limiter(createRequest());
 
             expect(result.headers).not.toHaveProperty('X-RateLimit-Limit');
         });
 
         it('includes Retry-After header when rate-limited', async () => {
-            const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
             const req = createRequest();
 
             await limiter(req);
@@ -988,7 +958,7 @@ describe('rateLimit', () => {
         });
 
         it('does not include Retry-After header when not rate-limited', async () => {
-            const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
             const result = await limiter(createRequest());
 
             expect(result.limited).toBe(false);
@@ -996,7 +966,7 @@ describe('rateLimit', () => {
         });
 
         it('includes Retry-After header with draft-6 headers', async () => {
-            const limiter = rateLimit({ limit: 1, windowMs: 60_000, headers: 'draft-6' });
+            const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-6' });
             const req = createRequest();
 
             await limiter(req);
@@ -1010,7 +980,7 @@ describe('rateLimit', () => {
 
     describe('default key generator', () => {
         it('extracts IP from x-forwarded-for', async () => {
-            const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
             const req = new Request('http://localhost/', {
                 headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' }
@@ -1025,7 +995,7 @@ describe('rateLimit', () => {
         });
 
         it('falls back to 127.0.0.1 when no IP headers present', async () => {
-            const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+            const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
             const req = new Request('http://localhost/');
 
             const result = await limiter(req);
@@ -1419,7 +1389,18 @@ describe('hardened interfaces', () => {
         });
     });
 
-    // ── 6. resolveAlgorithm edge cases ───────────────────────────────────
+    // ── 6. limit: 0 edge case ────────────────────────────────────────────
+
+    describe('limit: 0 (maintenance mode / kill switch)', () => {
+        it('rejects every request when limit is 0', async () => {
+            const limiter = rateLimit({ limit: 0, algorithm: { type: 'fixed-window', windowMs: 60_000 } });
+            const result = await limiter(createRequest());
+            expect(result.limited).toBe(true);
+            expect(result.remaining).toBe(0);
+        });
+    });
+
+    // ── 7. resolveAlgorithm edge cases ───────────────────────────────────
 
     describe('resolveAlgorithm edge cases', () => {
         it('AlgorithmConfig with extra properties is accepted', async () => {

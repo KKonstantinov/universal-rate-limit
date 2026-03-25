@@ -194,6 +194,17 @@ const SCRIPT_REGISTRY = new Map<string, ScriptHandler>([
  * If the script is evicted from the Redis script cache, the store
  * automatically reloads and retries.
  *
+ * @remarks
+ * **Limitations:**
+ *
+ * - **`unconsume()` is not supported.** The optional {@link Store.unconsume}
+ *   method is not implemented on this class.
+ *
+ * - **Only built-in algorithms are supported.** RedisStore uses a closed
+ *   registry of Lua scripts (`fixed-window`, `sliding-window`, `token-bucket`).
+ *   Passing a custom {@link Algorithm} will throw at runtime.
+ *   To use a custom algorithm with Redis, implement your own {@link Store}.
+ *
  * @example
  * ```ts
  * import { createClient } from 'redis';
@@ -304,8 +315,16 @@ export class RedisStore implements Store {
     /** Execute a Lua script with EVALSHA, falling back to EVAL on NOSCRIPT. */
     private async evalScript(script: string, args: string[]): Promise<RedisReply> {
         const [fullKey, ...scriptArgs] = args;
-        const shaPromise = this.shaPromises.get(script) ?? this.loadScript(script);
-        this.shaPromises.set(script, shaPromise);
+
+        let shaPromise = this.shaPromises.get(script);
+        if (!shaPromise) {
+            shaPromise = this.loadScript(script);
+            this.shaPromises.set(script, shaPromise);
+            // Self-clean on transient failure so the next call retries SCRIPT LOAD
+            shaPromise.catch(() => {
+                this.shaPromises.delete(script);
+            });
+        }
 
         try {
             const sha = await shaPromise;
@@ -313,7 +332,11 @@ export class RedisStore implements Store {
         } catch (error: unknown) {
             if (isNoscriptError(error)) {
                 const reply = await this.sendCommand('EVAL', script, '1', fullKey, ...scriptArgs);
-                this.shaPromises.set(script, this.loadScript(script));
+                const reloadPromise = this.loadScript(script);
+                this.shaPromises.set(script, reloadPromise);
+                reloadPromise.catch(() => {
+                    this.shaPromises.delete(script);
+                });
                 return reply;
             }
             throw error;

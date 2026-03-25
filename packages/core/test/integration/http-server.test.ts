@@ -51,7 +51,7 @@ describe('HTTP server integration', () => {
     });
 
     it('allows requests under the limit and blocks over it', async () => {
-        const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -84,7 +84,7 @@ describe('HTTP server integration', () => {
     });
 
     it('sends draft-7 rate limit headers over the wire', async () => {
-        const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-7' });
+        const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-7' });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -106,7 +106,7 @@ describe('HTTP server integration', () => {
     });
 
     it('sends draft-6 rate limit headers over the wire', async () => {
-        const limiter = rateLimit({ limit: 5, windowMs: 60_000, headers: 'draft-6' });
+        const limiter = rateLimit({ limit: 5, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-6' });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -129,7 +129,7 @@ describe('HTTP server integration', () => {
     });
 
     it('returns text/plain body for string messages on 429', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -157,7 +157,7 @@ describe('HTTP server integration', () => {
     });
 
     it('returns application/json body for object messages on 429', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -185,7 +185,7 @@ describe('HTTP server integration', () => {
     });
 
     it('tracks different clients separately by IP', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -257,7 +257,7 @@ describe('HTTP server integration', () => {
     it('supports custom keyGenerator with x-api-key header', async () => {
         const limiter = rateLimit({
             limit: 1,
-            windowMs: 60_000,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 },
             keyGenerator: (req: Request) => req.headers.get('x-api-key') ?? 'anonymous'
         });
 

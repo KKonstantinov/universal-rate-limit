@@ -147,11 +147,11 @@ class MyStore implements Store {
 
 ## Fail Open
 
-If the store throws an error, the rate limiter will re-throw by default. Set `passOnStoreError: true` to fail open — allowing the request through instead:
+If the store throws an error, the rate limiter will re-throw by default. Set `failOpen: true` to fail open — allowing the request through instead:
 
 ```ts
 const limiter = rateLimit({
     store: new RedisStore(redis, 60_000),
-    passOnStoreError: true // Allow requests if Redis is down
+    failOpen: true // Allow requests if Redis is down
 });
 ```

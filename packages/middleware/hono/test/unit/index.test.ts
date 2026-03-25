@@ -4,7 +4,7 @@ import { honoRateLimit } from '../../src/index.js';
 
 function createApp(options = {}) {
     const app = new Hono();
-    app.use('*', honoRateLimit({ limit: 2, windowMs: 60_000, ...options }));
+    app.use('*', honoRateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, ...options }));
     app.get('/', c => c.text('OK'));
     return app;
 }

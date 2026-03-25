@@ -53,7 +53,7 @@ describe('Concurrent requests', () => {
     it('burst from same IP — exactly limit get 200, rest get 429', async () => {
         const limit = 5;
         const burst = 10;
-        const limiter = rateLimit({ limit, windowMs: 60_000 });
+        const limiter = rateLimit({ limit, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -83,7 +83,7 @@ describe('Concurrent requests', () => {
     });
 
     it('concurrent requests from different IPs all succeed', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);
@@ -165,7 +165,7 @@ describe('Concurrent requests', () => {
     });
 
     it('burst then wait less than window then one more — still limited', async () => {
-        const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         const started = await startServer(async (req, res) => {
             const webReq = nodeRequestToWebRequest(req);

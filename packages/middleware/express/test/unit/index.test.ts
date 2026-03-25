@@ -7,7 +7,7 @@ let server: Server | undefined;
 
 function createApp(options = {}) {
     const app = express();
-    app.use(expressRateLimit({ limit: 2, windowMs: 60_000, ...options }));
+    app.use(expressRateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, ...options }));
     app.get('/', (_req, res) => {
         res.send('OK');
     });

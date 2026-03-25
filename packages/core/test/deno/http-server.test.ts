@@ -3,7 +3,7 @@ import { rateLimit, MemoryStore, buildRateLimitResponse } from '../../dist/index
 
 Deno.test('rate limiting through Deno.serve — allow then block', async () => {
     const store = new MemoryStore();
-    const limiter = rateLimit({ limit: 2, windowMs: 60_000, store });
+    const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, store });
     const ac = new AbortController();
 
     const server = Deno.serve({ port: 0, signal: ac.signal, onListen() {} }, async req => {
@@ -42,7 +42,7 @@ Deno.test('rate limiting through Deno.serve — allow then block', async () => {
 
 Deno.test('429 response includes correct rate limit headers', async () => {
     const store = new MemoryStore();
-    const limiter = rateLimit({ limit: 1, windowMs: 60_000, store });
+    const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 }, store });
     const ac = new AbortController();
 
     const server = Deno.serve({ port: 0, signal: ac.signal, onListen() {} }, async req => {
@@ -82,7 +82,7 @@ Deno.test('concurrent request burst', async () => {
     const limit = 5;
     const burst = 10;
     const store = new MemoryStore();
-    const limiter = rateLimit({ limit, windowMs: 60_000, store });
+    const limiter = rateLimit({ limit, algorithm: { type: 'sliding-window', windowMs: 60_000 }, store });
     const ac = new AbortController();
 
     const server = Deno.serve({ port: 0, signal: ac.signal, onListen() {} }, async req => {

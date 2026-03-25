@@ -12,7 +12,7 @@ describe('Bun.serve integration', () => {
     });
 
     it('rate limits through Bun.serve — allow then block', async () => {
-        const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         server = Bun.serve({
             port: 0,
@@ -39,7 +39,7 @@ describe('Bun.serve integration', () => {
     });
 
     it('429 response includes correct rate limit headers', async () => {
-        const limiter = rateLimit({ limit: 1, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         server = Bun.serve({
             port: 0,
@@ -65,7 +65,7 @@ describe('Bun.serve integration', () => {
     it('concurrent burst — exactly limit get 200', async () => {
         const limit = 5;
         const burst = 10;
-        const limiter = rateLimit({ limit, windowMs: 60_000 });
+        const limiter = rateLimit({ limit, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         server = Bun.serve({
             port: 0,

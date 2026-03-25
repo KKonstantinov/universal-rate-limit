@@ -9,7 +9,10 @@ function createRequest(ip = '30.0.0.1', path = '/'): Request {
 
 describe('withRateLimit', () => {
     it('passes through requests under the limit', async () => {
-        const handler = withRateLimit(async () => new Response('Hello'), { limit: 2, windowMs: 60_000 });
+        const handler = withRateLimit(async () => new Response('Hello'), {
+            limit: 2,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 }
+        });
 
         const res = await handler(createRequest());
         expect(res.status).toBe(200);
@@ -17,7 +20,10 @@ describe('withRateLimit', () => {
     });
 
     it('adds rate limit headers to successful responses', async () => {
-        const handler = withRateLimit(async () => new Response('Hello'), { limit: 10, windowMs: 60_000 });
+        const handler = withRateLimit(async () => new Response('Hello'), {
+            limit: 10,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 }
+        });
 
         const res = await handler(createRequest('30.0.0.2'));
         expect(res.headers.get('RateLimit')).toMatch(/limit=10/);
@@ -25,7 +31,10 @@ describe('withRateLimit', () => {
     });
 
     it('returns 429 when rate limited', async () => {
-        const handler = withRateLimit(async () => new Response('Hello'), { limit: 1, windowMs: 60_000 });
+        const handler = withRateLimit(async () => new Response('Hello'), {
+            limit: 1,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 }
+        });
 
         await handler(createRequest('30.0.0.3'));
         const res = await handler(createRequest('30.0.0.3'));
@@ -34,7 +43,11 @@ describe('withRateLimit', () => {
     });
 
     it('returns custom message when rate limited', async () => {
-        const handler = withRateLimit(async () => new Response('Hello'), { limit: 1, windowMs: 60_000, message: { error: 'too_many' } });
+        const handler = withRateLimit(async () => new Response('Hello'), {
+            limit: 1,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 },
+            message: { error: 'too_many' }
+        });
 
         await handler(createRequest('30.0.0.4'));
         const res = await handler(createRequest('30.0.0.4'));
@@ -46,7 +59,7 @@ describe('withRateLimit', () => {
 
 describe('nextjsRateLimit', () => {
     it('returns a rate limit checker function', async () => {
-        const check = nextjsRateLimit({ limit: 5, windowMs: 60_000 });
+        const check = nextjsRateLimit({ limit: 5, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
         const result = await check(createRequest('30.0.0.5'));
 
         expect(result.limited).toBe(false);
@@ -55,7 +68,7 @@ describe('nextjsRateLimit', () => {
     });
 
     it('reports limited when over the limit', async () => {
-        const check = nextjsRateLimit({ limit: 1, windowMs: 60_000 });
+        const check = nextjsRateLimit({ limit: 1, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
 
         await check(createRequest('30.0.0.6'));
         const result = await check(createRequest('30.0.0.6'));

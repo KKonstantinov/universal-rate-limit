@@ -7,7 +7,7 @@ let app: FastifyInstance | undefined;
 
 async function createApp(options = {}): Promise<FastifyInstance> {
     app = Fastify();
-    await app.register(fastifyRateLimit, { limit: 2, windowMs: 60_000, ...options });
+    await app.register(fastifyRateLimit, { limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, ...options });
     app.get('/', async () => 'OK');
     await app.ready();
     return app;

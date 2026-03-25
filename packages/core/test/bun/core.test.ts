@@ -9,7 +9,7 @@ function createRequest(ip = '1.2.3.4', path = '/'): Request {
 
 describe('rateLimit core (Bun)', () => {
     it('allows requests under the limit and blocks over it', async () => {
-        const limiter = rateLimit({ limit: 2, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
         const req = createRequest();
 
         const r1 = await limiter(req);
@@ -28,7 +28,7 @@ describe('rateLimit core (Bun)', () => {
     it('custom keyGenerator via Request.headers.get()', async () => {
         const limiter = rateLimit({
             limit: 1,
-            windowMs: 60_000,
+            algorithm: { type: 'sliding-window', windowMs: 60_000 },
             keyGenerator: (req: Request) => req.headers.get('x-api-key') ?? 'unknown'
         });
 
@@ -91,7 +91,7 @@ describe('MemoryStore (Bun)', () => {
 
 describe('Header generation (Bun)', () => {
     it('generates draft-7 headers by default', async () => {
-        const limiter = rateLimit({ limit: 10, windowMs: 60_000 });
+        const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 } });
         const result = await limiter(createRequest());
 
         expect(result.headers['RateLimit']).toMatch(/limit=10, remaining=9, reset=\d+/);
@@ -99,7 +99,7 @@ describe('Header generation (Bun)', () => {
     });
 
     it('generates draft-6 headers when configured', async () => {
-        const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6' });
+        const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-6' });
         const result = await limiter(createRequest());
 
         expect(result.headers['RateLimit-Limit']).toBe('10');

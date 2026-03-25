@@ -10,7 +10,7 @@ function createRequest(ip = '1.2.3.4', path = '/'): Request {
 Deno.test('rateLimit allows requests under the limit and blocks over it', async () => {
     const store = new MemoryStore();
     try {
-        const limiter = rateLimit({ limit: 2, windowMs: 60_000, store });
+        const limiter = rateLimit({ limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, store });
         const req = createRequest();
 
         const r1 = await limiter(req);
@@ -57,7 +57,7 @@ Deno.test('MemoryStore operations', async () => {
 Deno.test('generates draft-7 headers by default', async () => {
     const store = new MemoryStore();
     try {
-        const limiter = rateLimit({ limit: 10, windowMs: 60_000, store });
+        const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, store });
         const result = await limiter(createRequest());
 
         assertMatch(result.headers['RateLimit'] as string, /limit=10, remaining=9, reset=\d+/);
@@ -70,7 +70,7 @@ Deno.test('generates draft-7 headers by default', async () => {
 Deno.test('generates draft-6 headers when configured', async () => {
     const store = new MemoryStore();
     try {
-        const limiter = rateLimit({ limit: 10, windowMs: 60_000, headers: 'draft-6', store });
+        const limiter = rateLimit({ limit: 10, algorithm: { type: 'sliding-window', windowMs: 60_000 }, headers: 'draft-6', store });
         const result = await limiter(createRequest());
 
         assertEquals(result.headers['RateLimit-Limit'] as string, '10');

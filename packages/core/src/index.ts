@@ -45,7 +45,7 @@ export interface Algorithm<TState = unknown> {
      * generation to compute the `w=` policy parameter. Built-in algorithms
      * include keys like `windowMs`, `refillRate`, and optionally `bucketSize`.
      */
-    config: Record<string, unknown>;
+    readonly config: Readonly<Record<string, unknown>>;
 
     /**
      * Consume capacity and return the updated state with the result.
@@ -183,11 +183,10 @@ export type HeadersVersion = 'draft-6' | 'draft-7';
 
 /** Configuration options for the rate limiter. */
 export interface RateLimitOptions<TRequest = Request> {
-    /** Duration of the rate limit window in milliseconds. Sugar for sliding-window default. @default 60_000 */
-    windowMs?: number;
     /**
      * Maximum number of requests allowed per window. Can be a static number
      * or an async function that resolves per-request (useful for per-user limits).
+     * A value of `0` is valid and will reject every request (useful for maintenance mode or kill switches).
      * @default 60
      */
     limit?: number | ((request: TRequest) => number | Promise<number>);
@@ -234,10 +233,10 @@ export interface RateLimitOptions<TRequest = Request> {
     skip?: (request: TRequest) => boolean | Promise<boolean>;
     /**
      * When `true`, store errors are swallowed and the request is allowed
-     * through (fail-open). When `false`, store errors propagate as exceptions.
+     * through (fail-open semantics). When `false`, store errors propagate as exceptions.
      * @default false
      */
-    passOnStoreError?: boolean;
+    failOpen?: boolean;
     /**
      * Number of units to consume per request. Can be a static number or an
      * async function that resolves per-request (useful for weighted endpoints).
@@ -270,7 +269,7 @@ export interface RateLimitResult {
 // ── Default key generator ────────────────────────────────────────────────────
 
 /** Common proxy/CDN headers that carry the client's real IP address. */
-const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'] as const;
+export const IP_HEADERS: readonly string[] = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
 
 /**
  * Default key generator that extracts the client IP from well-known proxy
@@ -288,6 +287,20 @@ function defaultKeyGenerator(request: Request): string {
 
 // ── Header generation ────────────────────────────────────────────────────────
 
+/** Parameters for {@link generateHeaders}. */
+interface GenerateHeadersOptions {
+    version: HeadersVersion;
+    limit: number;
+    remaining: number;
+    resetTimeMs: number;
+    nowMs: number;
+    windowSeconds: number;
+    legacyHeaders: boolean;
+    limited: boolean;
+    retryAfterSeconds: number;
+    policyHeader?: string;
+}
+
 /**
  * Build RateLimit response headers according to the specified IETF draft version.
  *
@@ -298,53 +311,30 @@ function defaultKeyGenerator(request: Request): string {
  * When `limited` is `true`, a `Retry-After` header (delay-seconds, per RFC 9110 §10.2.3) is included.
  * When `legacyHeaders` is `true`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
  * `X-RateLimit-Reset` headers are added alongside the standard headers.
- *
- * @param version - IETF draft version controlling header format.
- * @param limit - Maximum number of requests allowed in the window.
- * @param remaining - Requests remaining before the limit is reached.
- * @param resetTimeMs - Timestamp (ms since epoch) when the current window resets.
- * @param nowMs - Current timestamp (ms since epoch), used to compute `reset` as a delta.
- * @param windowSeconds - Window duration in seconds, used to build the `w=` policy parameter.
- * @param legacyHeaders - Whether to include `X-RateLimit-*` headers.
- * @param limited - Whether the current request has been rate-limited (triggers `Retry-After`).
- * @param retryAfterSeconds - Seconds the client should wait before retrying.
- * @param policyHeader - Optional override for the `RateLimit-Policy` header value (draft-7 only).
- * @returns A record of header name–value pairs ready to be set on the response.
  */
-function generateHeaders(
-    version: HeadersVersion,
-    limit: number,
-    remaining: number,
-    resetTimeMs: number,
-    nowMs: number,
-    windowSeconds: number,
-    legacyHeaders: boolean,
-    limited: boolean,
-    retryAfterSeconds: number,
-    policyHeader?: string
-): Record<string, string> {
-    const resetSeconds = Math.max(0, Math.ceil((resetTimeMs - nowMs) / 1000));
-    const clampedRemaining = String(Math.max(0, remaining));
+function generateHeaders(opts: GenerateHeadersOptions): Record<string, string> {
+    const resetSeconds = Math.max(0, Math.ceil((opts.resetTimeMs - opts.nowMs) / 1000));
+    const clampedRemaining = String(Math.max(0, opts.remaining));
 
     const headers: Record<string, string> =
-        version === 'draft-6'
+        opts.version === 'draft-6'
             ? {
-                  'RateLimit-Limit': String(limit),
+                  'RateLimit-Limit': String(opts.limit),
                   'RateLimit-Remaining': clampedRemaining,
                   'RateLimit-Reset': String(resetSeconds)
               }
             : {
-                  RateLimit: 'limit=' + String(limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
-                  'RateLimit-Policy': policyHeader ?? String(limit) + ';w=' + String(windowSeconds)
+                  RateLimit: 'limit=' + String(opts.limit) + ', remaining=' + clampedRemaining + ', reset=' + String(resetSeconds),
+                  'RateLimit-Policy': opts.policyHeader ?? String(opts.limit) + ';w=' + String(opts.windowSeconds)
               };
 
     // RFC 9110 §10.2.3 — Retry-After (delay-seconds)
-    if (limited) {
-        headers['Retry-After'] = String(retryAfterSeconds);
+    if (opts.limited) {
+        headers['Retry-After'] = String(opts.retryAfterSeconds);
     }
 
-    if (legacyHeaders) {
-        headers['X-RateLimit-Limit'] = String(limit);
+    if (opts.legacyHeaders) {
+        headers['X-RateLimit-Limit'] = String(opts.limit);
         headers['X-RateLimit-Remaining'] = clampedRemaining;
         headers['X-RateLimit-Reset'] = String(resetSeconds);
     }
@@ -367,6 +357,11 @@ interface FixedWindowState {
  *
  * The window starts from each user's first request (per-user windows).
  * When the window expires, the counter resets to zero.
+ *
+ * **Note:** The hit counter increments even for rejected requests. A client
+ * that continues sending requests while rate-limited will push their recovery
+ * further out. See {@link tokenBucket} for an algorithm that does not penalize
+ * rejected requests.
  *
  * @param options - `{ windowMs }` — window duration in milliseconds.
  * @returns An {@link Algorithm} that implements fixed-window rate limiting.
@@ -427,6 +422,11 @@ interface SlidingWindowState {
  * Smooths burst edges by weighting the previous window's count into the
  * current window: `totalHits = ceil(previousHits * weight + currentHits)`
  * where `weight` decays linearly from 1 to 0 over the current window.
+ *
+ * **Note:** The hit counter increments even for rejected requests. A client
+ * that continues sending requests while rate-limited will push their recovery
+ * further out. See {@link tokenBucket} for an algorithm that does not penalize
+ * rejected requests.
  *
  * @param options - `{ windowMs }` — window duration in milliseconds.
  * @returns An {@link Algorithm} that implements sliding-window rate limiting.
@@ -590,6 +590,10 @@ interface TokenBucketState {
  * tokens per request. Tokens refill at `refillRate` tokens per `refillMs`
  * milliseconds, capped at bucket capacity.
  *
+ * **Note:** Unlike {@link fixedWindow} and {@link slidingWindow}, rejected
+ * requests do not consume tokens. A client that continues sending requests
+ * while rate-limited will recover at the same rate regardless.
+ *
  * @param options - `{ refillRate, bucketSize?, refillMs? }` — tokens refilled per interval,
  *   optional bucket capacity, optional refill interval (default `1000` ms).
  * @returns An {@link Algorithm} that implements token-bucket rate limiting.
@@ -674,7 +678,7 @@ export function tokenBucket(options: { refillRate: number; bucketSize?: number; 
 /** Resolve an algorithm option to an Algorithm object. */
 function resolveAlgorithm(options: RateLimitOptions): Algorithm {
     if (!options.algorithm) {
-        return slidingWindow({ windowMs: options.windowMs ?? 60_000 });
+        return slidingWindow({ windowMs: 60_000 });
     }
     // Guard against old string-style algorithm names
     if (typeof options.algorithm !== 'object') {
@@ -853,7 +857,7 @@ function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
  *
  * @example
  * ```ts
- * const limiter = rateLimit({ windowMs: 15 * 60_000, limit: 100 });
+ * const limiter = rateLimit({ limit: 100, algorithm: { type: 'sliding-window', windowMs: 15 * 60_000 } });
  * const result = await limiter(request);
  * if (result.limited) { \/* reject *\/ }
  * ```
@@ -884,7 +888,7 @@ export function rateLimit<TRequest = Request>(
     const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
     const headersVersion = options.headers ?? 'draft-7';
     const legacyHeaders = options.legacyHeaders ?? false;
-    const passOnStoreError = options.passOnStoreError ?? false;
+    const failOpen = options.failOpen ?? false;
     const skip = options.skip;
 
     const store = options.store ?? new MemoryStore();
@@ -909,18 +913,18 @@ export function rateLimit<TRequest = Request>(
             limit,
             remaining: limit,
             resetTime: new Date(resetTimeMs),
-            headers: generateHeaders(
-                headersVersion,
+            headers: generateHeaders({
+                version: headersVersion,
                 limit,
-                limit,
+                remaining: limit,
                 resetTimeMs,
-                now,
+                nowMs: now,
                 windowSeconds,
                 legacyHeaders,
-                false,
-                0,
-                staticPolicyHeader
-            )
+                limited: false,
+                retryAfterSeconds: 0,
+                policyHeader: staticPolicyHeader
+            })
         };
     }
 
@@ -928,18 +932,18 @@ export function rateLimit<TRequest = Request>(
         const resetTimeMs = consumeResult.resetTime.getTime();
         const retryAfterSeconds = consumeResult.limited ? Math.max(0, Math.ceil(consumeResult.retryAfterMs / 1000)) : 0;
 
-        const headers = generateHeaders(
-            headersVersion,
+        const headers = generateHeaders({
+            version: headersVersion,
             limit,
-            consumeResult.remaining,
+            remaining: consumeResult.remaining,
             resetTimeMs,
-            now,
+            nowMs: now,
             windowSeconds,
             legacyHeaders,
-            consumeResult.limited,
+            limited: consumeResult.limited,
             retryAfterSeconds,
-            staticPolicyHeader
-        );
+            policyHeader: staticPolicyHeader
+        });
 
         return {
             limited: consumeResult.limited,
@@ -958,16 +962,16 @@ export function rateLimit<TRequest = Request>(
             if (isPromise(consumeResult)) {
                 return consumeResult.then(
                     r => buildResult(r, limit, now),
-                    () => {
-                        if (passOnStoreError) return makeBypassResult(limit, now);
-                        throw new Error('Rate limit store error');
+                    (error: unknown) => {
+                        if (failOpen) return makeBypassResult(limit, now);
+                        throw new Error('Rate limit store error', { cause: error });
                     }
                 );
             }
             return buildResult(consumeResult, limit, now);
-        } catch {
-            if (passOnStoreError) return makeBypassResult(limit, now);
-            throw new Error('Rate limit store error');
+        } catch (error) {
+            if (failOpen) return makeBypassResult(limit, now);
+            throw new Error('Rate limit store error', { cause: error });
         }
     }
 
@@ -1029,15 +1033,15 @@ export function rateLimit<TRequest = Request>(
  *
  * Middleware adapters call this when {@link RateLimitResult.limited} is `true`.
  * If a custom {@link RateLimitOptions.handler | handler} is provided it takes
- * full control; otherwise a response is constructed from `message` and
- * `statusCode`.
+ * full control; otherwise a response is constructed synchronously from
+ * `message` and `statusCode`.
  *
  * @param request - The original incoming request.
  * @param result - The rate limit evaluation result.
  * @param options - Response-building options (handler, message, statusCode).
- * @returns A `Response` ready to send back to the client.
+ * @returns A `Response` (or `Promise<Response>` when `handler` is async).
  */
-export async function buildRateLimitResponse<TRequest = Request>(
+export function buildRateLimitResponse<TRequest = Request>(
     request: TRequest,
     result: RateLimitResult,
     options: {
@@ -1045,7 +1049,7 @@ export async function buildRateLimitResponse<TRequest = Request>(
         message?: string | Record<string, unknown> | ((request: TRequest, result: RateLimitResult) => string | Record<string, unknown>);
         statusCode?: number;
     }
-): Promise<Response> {
+): Response | Promise<Response> {
     if (options.handler) {
         return options.handler(request, result);
     }
