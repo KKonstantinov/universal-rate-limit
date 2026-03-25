@@ -208,7 +208,8 @@ export interface RateLimitOptions<TRequest = Request> {
     /**
      * When `true`, include non-standard `X-RateLimit-Limit`,
      * `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers alongside
-     * the standard headers. Widely used by GitHub, Twitter, etc.
+     * the standard headers. `X-RateLimit-Reset` is a Unix timestamp (seconds
+     * since epoch), matching the convention used by GitHub, Twitter, etc.
      * @default false
      */
     legacyHeaders?: boolean;
@@ -310,7 +311,8 @@ interface GenerateHeadersOptions {
  *
  * When `limited` is `true`, a `Retry-After` header (delay-seconds, per RFC 9110 §10.2.3) is included.
  * When `legacyHeaders` is `true`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
- * `X-RateLimit-Reset` headers are added alongside the standard headers.
+ * `X-RateLimit-Reset` headers are added alongside the standard headers. `X-RateLimit-Reset`
+ * uses a Unix timestamp (seconds since epoch), matching the convention used by GitHub, Twitter, etc.
  */
 function generateHeaders(opts: GenerateHeadersOptions): Record<string, string> {
     const resetSeconds = Math.max(0, Math.ceil((opts.resetTimeMs - opts.nowMs) / 1000));
@@ -336,7 +338,7 @@ function generateHeaders(opts: GenerateHeadersOptions): Record<string, string> {
     if (opts.legacyHeaders) {
         headers['X-RateLimit-Limit'] = String(opts.limit);
         headers['X-RateLimit-Remaining'] = clampedRemaining;
-        headers['X-RateLimit-Reset'] = String(resetSeconds);
+        headers['X-RateLimit-Reset'] = String(Math.ceil(opts.resetTimeMs / 1000));
     }
 
     return headers;

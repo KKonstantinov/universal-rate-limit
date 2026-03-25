@@ -918,7 +918,10 @@ describe('rateLimit', () => {
             // Legacy headers should also be present
             expect(result.headers['X-RateLimit-Limit']).toBe('10');
             expect(result.headers['X-RateLimit-Remaining']).toBe('9');
-            expect(result.headers['X-RateLimit-Reset']).toMatch(/^\d+$/);
+            // X-RateLimit-Reset should be a Unix timestamp (seconds since epoch), not delta-seconds
+            const resetEpoch = Number(result.headers['X-RateLimit-Reset']);
+            expect(resetEpoch).toBeGreaterThan(1_000_000_000); // Sanity: clearly a Unix timestamp, not a small delta
+            expect(resetEpoch).toBeLessThanOrEqual(Math.ceil(Date.now() / 1000) + 60);
         });
 
         it('includes legacy headers alongside draft-6', async () => {
