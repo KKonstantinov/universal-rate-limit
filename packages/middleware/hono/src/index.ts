@@ -2,7 +2,16 @@ import type { MiddlewareHandler } from 'hono';
 import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { MemoryStore, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Hono middleware adapter. */
 export type HonoRateLimitOptions = RateLimitOptions;
@@ -44,6 +53,10 @@ export function honoRateLimit(options: HonoRateLimitOptions = {}): MiddlewareHan
             });
 
             c.status(response.status as Parameters<typeof c.status>[0]);
+            const contentType = response.headers.get('content-type');
+            if (contentType) {
+                c.header('content-type', contentType);
+            }
             return c.body(await response.text());
         }
 

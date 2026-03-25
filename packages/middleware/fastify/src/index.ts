@@ -1,15 +1,21 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
-import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
+import { rateLimit, buildRateLimitResponse, IP_HEADERS } from 'universal-rate-limit';
 import type { RateLimitOptions } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { MemoryStore, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Fastify plugin adapter. */
 export type FastifyRateLimitOptions = RateLimitOptions<FastifyRequest>;
-
-/** Common proxy/CDN headers that carry the client's real IP address. */
-const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
 
 /**
  * Default key generator for Fastify that reads client IP from well-known
@@ -52,9 +58,9 @@ function rateLimitPlugin(fastify: FastifyInstance, options: FastifyRateLimitOpti
 
             const body = await response.text();
             const contentType = response.headers.get('content-type');
-            void reply.code(response.status);
+            reply.code(response.status);
             if (contentType) {
-                void reply.header('content-type', contentType);
+                reply.header('content-type', contentType);
             }
             return reply.send(body);
         }

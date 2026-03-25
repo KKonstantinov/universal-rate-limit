@@ -5,7 +5,7 @@ const app = express();
 
 app.use(
     expressRateLimit({
-        windowMs: 60_000, // 1 minute
+        algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
         limit: 5 // 5 requests per window (low for demo purposes)
     })
 );

@@ -2,6 +2,8 @@
   <img src="https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit-header.png" alt="universal-rate-limit" />
 </p>
 
+<h1 align="center">universal-rate-limit</h1>
+
 <p align="center">
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/v/universal-rate-limit.svg" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/dm/universal-rate-limit.svg" alt="npm downloads" /></a>
@@ -69,7 +71,7 @@ rateLimit({
     handler: undefined, // Custom 429 response handler
     message: 'Too Many Requests', // Response body (string, object, or function)
     statusCode: 429, // HTTP status code when limited
-    passOnStoreError: false // Fail open if store errors
+    failOpen: false // Fail open if store errors
 });
 ```
 

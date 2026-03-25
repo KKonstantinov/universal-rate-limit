@@ -1,14 +1,20 @@
 import type { Request as ExpressRequest, Response as ExpressResponse, NextFunction, RequestHandler } from 'express';
-import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
+import { rateLimit, buildRateLimitResponse, IP_HEADERS } from 'universal-rate-limit';
 import type { RateLimitOptions, RateLimitResult } from 'universal-rate-limit';
 
-export type { RateLimitOptions, RateLimitResult, Store, IncrementResult, MemoryStore } from 'universal-rate-limit';
+export type {
+    RateLimitOptions,
+    RateLimitResult,
+    Store,
+    ConsumeResult,
+    Algorithm,
+    AlgorithmConfig,
+    MemoryStoreOptions
+} from 'universal-rate-limit';
+export { MemoryStore, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 
 /** Rate limit options for the Express middleware adapter. */
 export type ExpressRateLimitOptions = RateLimitOptions<ExpressRequest>;
-
-/** Common proxy/CDN headers that carry the client's real IP address. */
-const IP_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
 
 /**
  * Default key generator for Express that reads client IP from well-known
@@ -51,25 +57,33 @@ function handleLimited(
     for (const key in headers) {
         res.setHeader(key, headers[key]);
     }
-    void buildRateLimitResponse<ExpressRequest>(req, result, {
-        handler: options.handler,
-        message: options.message,
-        statusCode: options.statusCode
-    }).then(
-        response => {
-            res.status(response.status);
-            void response.text().then(body => {
-                const contentType = response.headers.get('content-type');
-                if (contentType) {
-                    res.setHeader('Content-Type', contentType);
-                }
-                res.send(body);
-            });
-        },
-        (error: unknown) => {
-            next(error);
+    function sendResponse(response: Response): void {
+        const contentType = response.headers.get('content-type');
+        res.status(response.status);
+        if (contentType) {
+            res.setHeader('Content-Type', contentType);
         }
-    );
+        void response.text().then(body => {
+            res.send(body);
+        });
+    }
+
+    try {
+        const response = buildRateLimitResponse<ExpressRequest>(req, result, {
+            handler: options.handler,
+            message: options.message,
+            statusCode: options.statusCode
+        });
+        if (isPromise(response)) {
+            response.then(sendResponse).catch((error: unknown) => {
+                next(error);
+            });
+        } else {
+            sendResponse(response);
+        }
+    } catch (error: unknown) {
+        next(error);
+    }
 }
 
 /**

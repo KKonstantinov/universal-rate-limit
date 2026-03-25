@@ -13,19 +13,19 @@ const result: RateLimitResult = await limiter(request);
 
 **Parameters:**
 
-| Option             | Type                                                                                      | Default                | Description                 |
-| ------------------ | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------------- |
-| `windowMs`         | `number`                                                                                  | `60_000`               | Time window in milliseconds |
-| `limit`            | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window |
-| `algorithm`        | `'fixed-window' \| 'sliding-window'`                                                      | `'fixed-window'`       | Rate limiting algorithm     |
-| `headers`          | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version        |
-| `store`            | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend             |
-| `keyGenerator`     | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier   |
-| `skip`             | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting          |
-| `handler`          | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler     |
-| `message`          | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body               |
-| `statusCode`       | `number`                                                                                  | `429`                  | HTTP status code            |
-| `passOnStoreError` | `boolean`                                                                                 | `false`                | Fail open on store errors   |
+| Option         | Type                                                                                      | Default                | Description                 |
+| -------------- | ----------------------------------------------------------------------------------------- | ---------------------- | --------------------------- |
+| `windowMs`     | `number`                                                                                  | `60_000`               | Time window in milliseconds |
+| `limit`        | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window |
+| `algorithm`    | `'fixed-window' \| 'sliding-window'`                                                      | `'fixed-window'`       | Rate limiting algorithm     |
+| `headers`      | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version        |
+| `store`        | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend             |
+| `keyGenerator` | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier   |
+| `skip`         | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting          |
+| `handler`      | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler     |
+| `message`      | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body               |
+| `statusCode`   | `number`                                                                                  | `429`                  | HTTP status code            |
+| `failOpen`     | `boolean`                                                                                 | `false`                | Fail open on store errors   |
 
 **Returns:** `(request: Request) => Promise<RateLimitResult>`
 
@@ -121,20 +121,16 @@ import { RedisStore } from '@universal-rate-limit/redis';
 
 const store = new RedisStore({
     sendCommand: (...args) => redis.call(...args),
-    windowMs: 60_000,
-    prefix: 'rl:',
-    resetExpiryOnChange: false
+    prefix: 'rl:'
 });
 ```
 
 **Constructor:**
 
-| Parameter             | Type            | Default | Description                              |
-| --------------------- | --------------- | ------- | ---------------------------------------- |
-| `sendCommand`         | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
-| `windowMs`            | `number`        | —       | **Required.** Window duration in ms.     |
-| `prefix`              | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
-| `resetExpiryOnChange` | `boolean`       | `false` | Reset the TTL on every increment.        |
+| Parameter     | Type            | Default | Description                              |
+| ------------- | --------------- | ------- | ---------------------------------------- |
+| `sendCommand` | `SendCommandFn` | —       | **Required.** Sends a raw Redis command. |
+| `prefix`      | `string`        | `'rl:'` | Key prefix for all rate limit keys.      |
 
 **Methods:**
 

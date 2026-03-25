@@ -6,7 +6,7 @@ const app = new Hono();
 
 app.use(
     honoRateLimit({
-        windowMs: 60_000, // 1 minute
+        algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
         limit: 5 // 5 requests per window (low for demo purposes)
     })
 );

@@ -62,9 +62,7 @@ const limiter = rateLimit({
 ```ts
 new RedisStore({
     sendCommand, // Required — function that sends raw Redis commands
-    windowMs, // Required — window duration in milliseconds
-    prefix: 'rl:', // Key prefix for all rate limit keys
-    resetExpiryOnChange: false // Reset TTL on every increment
+    prefix: 'rl:' // Key prefix for all rate limit keys
 });
 ```
 

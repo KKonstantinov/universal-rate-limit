@@ -2,7 +2,8 @@
     "extends": "./tsconfig.base.json",
     "compilerOptions": {
         "rootDir": ".",
-        "noEmit": true
+        "noEmit": true,
+        "lib": ["ES2022", "DOM", "DOM.Iterable"]
     },
     "include": [
         "packages/core/src",
@@ -16,10 +17,13 @@
         "packages/middleware/*/*.config.ts",
         "packages/benchmarks/src",
         "packages/benchmarks/*.config.ts",
+        "packages/playground/src/**/*.ts",
+        "packages/playground/src/**/*.tsx",
+        "packages/playground/test",
+        "packages/playground/*.config.ts",
         "examples/*/src",
         "examples/*/test",
         "examples/*/*.config.ts",
-        "tests/integration",
         "docs/.vitepress/theme",
         "*.config.ts"
     ],

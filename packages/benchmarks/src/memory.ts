@@ -9,7 +9,7 @@
  * Run with: node --expose-gc dist/memory.mjs
  */
 
-import { MemoryStore as UniversalMemoryStore } from 'universal-rate-limit';
+import { MemoryStore as UniversalMemoryStore, fixedWindow } from 'universal-rate-limit';
 import expressRateLimit from 'express-rate-limit';
 import fs from 'node:fs';
 
@@ -51,9 +51,10 @@ function benchUniversalMemory(): MemoryResult {
     forceGC();
     const before = process.memoryUsage().heapUsed;
 
-    const store = new UniversalMemoryStore(WINDOW_MS, 'fixed-window');
+    const store = new UniversalMemoryStore();
+    const algo = fixedWindow({ windowMs: WINDOW_MS });
     for (let i = 0; i < KEY_COUNT; i++) {
-        store.increment(`key-${String(i)}`);
+        store.consume(`key-${String(i)}`, algo, 1_000_000);
     }
 
     forceGC();
