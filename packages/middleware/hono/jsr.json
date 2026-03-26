@@ -1,12 +1,12 @@
 {
     "name": "@universal-rate-limit/hono",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "license": "MIT",
     "exports": {
         ".": "./src/index.ts"
     },
     "imports": {
-        "universal-rate-limit": "npm:universal-rate-limit@^2.0.2",
+        "universal-rate-limit": "npm:universal-rate-limit@^2.1.0",
         "hono": "npm:hono@^4.0.0"
     },
     "publish": {

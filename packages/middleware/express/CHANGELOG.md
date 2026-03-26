@@ -1,5 +1,12 @@
 # @universal-rate-limit/express
 
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies [[`46ccbb5`](https://github.com/KKonstantinov/universal-rate-limit/commit/46ccbb5fd47b28e0b9a9f14958b71e1a229ccae6)]:
+    - universal-rate-limit@2.1.0
+
 ## 2.0.2
 
 ### Patch Changes
