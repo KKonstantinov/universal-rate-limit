@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/fastify",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "description": "Fastify plugin for universal-rate-limit",
     "type": "module",
     "sideEffects": false,

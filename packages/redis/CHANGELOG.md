@@ -1,5 +1,14 @@
 # @universal-rate-limit/redis
 
+## 2.0.2
+
+### Patch Changes
+
+- [`5b3a3d7`](https://github.com/KKonstantinov/universal-rate-limit/commit/5b3a3d758e195e33e1ee56aa2f376439a7a3230b) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - docs update
+
+- Updated dependencies [[`5b3a3d7`](https://github.com/KKonstantinov/universal-rate-limit/commit/5b3a3d758e195e33e1ee56aa2f376439a7a3230b)]:
+    - universal-rate-limit@2.0.2
+
 ## 2.0.1
 
 ### Patch Changes
