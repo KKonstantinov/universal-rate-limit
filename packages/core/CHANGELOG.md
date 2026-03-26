@@ -1,5 +1,15 @@
 # universal-rate-limit
 
+## 2.1.0
+
+### Minor Changes
+
+- [#11](https://github.com/KKonstantinov/universal-rate-limit/pull/11) [`46ccbb5`](https://github.com/KKonstantinov/universal-rate-limit/commit/46ccbb5fd47b28e0b9a9f14958b71e1a229ccae6) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - Remove `bucketSize` from
+  `AlgorithmConfig` and `tokenBucket()` factory. Bucket capacity is now always controlled by the top-level `limit` option, making it the single source of truth for capacity across all algorithms. This fixes a bug where headers could report a different limit than what the
+  algorithm actually enforced.
+
+    **Migration:** Replace `{ type: 'token-bucket', refillRate: 10, bucketSize: 50 }` with `{ type: 'token-bucket', refillRate: 10 }` and set `limit: 50` on the top-level options.
+
 ## 2.0.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/hono",
-    "version": "2.0.2",
+    "version": "2.0.3",
     "description": "Hono middleware for universal-rate-limit",
     "type": "module",
     "sideEffects": false,
