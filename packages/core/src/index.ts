@@ -43,7 +43,7 @@ export interface Algorithm<TState = unknown> {
      *
      * Used by RedisStore to pass ARGV to Lua scripts, and by header
      * generation to compute the `w=` policy parameter. Built-in algorithms
-     * include keys like `windowMs`, `refillRate`, and optionally `bucketSize`.
+     * include keys like `windowMs`, `refillRate`, and `refillMs`.
      */
     readonly config: Readonly<Record<string, unknown>>;
 
@@ -106,14 +106,14 @@ export interface Algorithm<TState = unknown> {
  *
  * - `{ type: 'fixed-window', windowMs }` — simple counter that resets after each window.
  * - `{ type: 'sliding-window', windowMs }` — weighted counter that smooths burst edges across windows.
- * - `{ type: 'token-bucket', refillRate, bucketSize?, refillMs? }` — bucket that refills at a steady rate;
- *   `bucketSize` defaults to the configured `limit` when omitted. `refillMs` is the interval over
+ * - `{ type: 'token-bucket', refillRate, refillMs? }` — bucket that refills at a steady rate;
+ *   the top-level `limit` option determines bucket capacity. `refillMs` is the interval over
  *   which `refillRate` tokens are added (default `1000`, i.e. tokens per second).
  */
 export type AlgorithmConfig =
     | { type: 'fixed-window'; windowMs: number }
     | { type: 'sliding-window'; windowMs: number }
-    | { type: 'token-bucket'; refillRate: number; bucketSize?: number; refillMs?: number };
+    | { type: 'token-bucket'; refillRate: number; refillMs?: number };
 
 /**
  * Backend store interface for persisting rate limit state.
@@ -184,8 +184,9 @@ export type HeadersVersion = 'draft-6' | 'draft-7';
 /** Configuration options for the rate limiter. */
 export interface RateLimitOptions<TRequest = Request> {
     /**
-     * Maximum number of requests allowed per window. Can be a static number
-     * or an async function that resolves per-request (useful for per-user limits).
+     * Maximum number of requests allowed per window. For token-bucket algorithms,
+     * this value determines the bucket capacity (maximum tokens).
+     * Can be a static number or an async function that resolves per-request (useful for per-user limits).
      * A value of `0` is valid and will reject every request (useful for maintenance mode or kill switches).
      * @default 60
      */
@@ -588,35 +589,36 @@ interface TokenBucketState {
 /**
  * Create a token-bucket rate limiting algorithm.
  *
- * The bucket starts full (at `bucketSize` or `limit` tokens) and deducts
- * tokens per request. Tokens refill at `refillRate` tokens per `refillMs`
- * milliseconds, capped at bucket capacity.
+ * The bucket starts full (at `limit` tokens) and deducts tokens per request.
+ * Tokens refill at `refillRate` tokens per `refillMs` milliseconds, capped
+ * at bucket capacity. Bucket capacity is controlled by the `limit` parameter
+ * passed to {@link Algorithm.consume} (set via the top-level `limit` option
+ * on {@link RateLimitOptions}).
  *
  * **Note:** Unlike {@link fixedWindow} and {@link slidingWindow}, rejected
  * requests do not consume tokens. A client that continues sending requests
  * while rate-limited will recover at the same rate regardless.
  *
- * @param options - `{ refillRate, bucketSize?, refillMs? }` — tokens refilled per interval,
- *   optional bucket capacity, optional refill interval (default `1000` ms).
+ * @param options - `{ refillRate, refillMs? }` — tokens refilled per interval,
+ *   optional refill interval (default `1000` ms).
  * @returns An {@link Algorithm} that implements token-bucket rate limiting.
  */
-export function tokenBucket(options: { refillRate: number; bucketSize?: number; refillMs?: number }): Algorithm<TokenBucketState> {
-    const { refillRate, bucketSize } = options;
+export function tokenBucket(options: { refillRate: number; refillMs?: number }): Algorithm<TokenBucketState> {
+    const { refillRate } = options;
     const refillMs = options.refillMs ?? 1000;
     const tokensPerMs = refillRate / refillMs;
     return {
         name: 'token-bucket',
-        config: bucketSize == null ? { refillRate, refillMs } : { refillRate, refillMs, bucketSize },
+        config: { refillRate, refillMs },
 
         consume(state: TokenBucketState | undefined, limit: number, nowMs: number, cost = 1) {
-            const capacity = bucketSize ?? limit;
             let tokens: number;
 
             if (state) {
                 // Refill tokens based on elapsed time
                 const elapsed = nowMs - state.lastRefillMs;
                 const refilled = elapsed * tokensPerMs;
-                tokens = Math.min(capacity, state.tokens + refilled);
+                tokens = Math.min(limit, state.tokens + refilled);
 
                 // Try to consume
                 if (tokens >= cost) {
@@ -624,53 +626,50 @@ export function tokenBucket(options: { refillRate: number; bucketSize?: number; 
                 } else {
                     // Not enough tokens — limited
                     const retryAfterMs = Math.ceil((cost - tokens) / tokensPerMs);
-                    const resetTime = new Date(nowMs + Math.ceil((capacity - tokens) / tokensPerMs));
+                    const resetTime = new Date(nowMs + Math.ceil((limit - tokens) / tokensPerMs));
                     const next: TokenBucketState = { tokens, lastRefillMs: nowMs };
                     return { next, result: { limited: true, remaining: 0, resetTime, retryAfterMs } };
                 }
             } else {
                 // First request — bucket starts full, deduct cost
-                if (capacity < cost) {
-                    const retryAfterMs = Math.ceil((cost - capacity) / tokensPerMs);
-                    const resetTime = new Date(nowMs + Math.ceil(capacity / tokensPerMs));
-                    const next: TokenBucketState = { tokens: capacity, lastRefillMs: nowMs };
+                if (limit < cost) {
+                    const retryAfterMs = Math.ceil((cost - limit) / tokensPerMs);
+                    const resetTime = new Date(nowMs + Math.ceil(limit / tokensPerMs));
+                    const next: TokenBucketState = { tokens: limit, lastRefillMs: nowMs };
                     return { next, result: { limited: true, remaining: 0, resetTime, retryAfterMs } };
                 }
-                tokens = capacity - cost;
+                tokens = limit - cost;
             }
 
             const remaining = Math.max(0, Math.floor(tokens));
-            const resetTime = new Date(nowMs + Math.ceil((capacity - tokens) / tokensPerMs));
+            const resetTime = new Date(nowMs + Math.ceil((limit - tokens) / tokensPerMs));
             const next: TokenBucketState = { tokens, lastRefillMs: nowMs };
 
             return { next, result: { limited: false, remaining, resetTime, retryAfterMs: 0 } };
         },
 
         unconsume(state: TokenBucketState, limit: number, _nowMs: number, cost = 1): TokenBucketState {
-            const capacity = bucketSize ?? limit;
-            return { tokens: Math.min(capacity, state.tokens + cost), lastRefillMs: state.lastRefillMs };
+            return { tokens: Math.min(limit, state.tokens + cost), lastRefillMs: state.lastRefillMs };
         },
 
         peek(state: TokenBucketState | undefined, limit: number, nowMs: number) {
-            const capacity = bucketSize ?? limit;
             if (!state) {
-                return { limited: false, remaining: capacity, resetTime: new Date(nowMs), retryAfterMs: 0 };
+                return { limited: false, remaining: limit, resetTime: new Date(nowMs), retryAfterMs: 0 };
             }
 
             const elapsed = nowMs - state.lastRefillMs;
             const refilled = elapsed * tokensPerMs;
-            const tokens = Math.min(capacity, state.tokens + refilled);
+            const tokens = Math.min(limit, state.tokens + refilled);
             const remaining = Math.max(0, Math.floor(tokens));
             const limited = tokens < 1;
             const retryAfterMs = limited ? Math.ceil((1 - tokens) / tokensPerMs) : 0;
-            const resetTime = new Date(nowMs + Math.ceil((capacity - tokens) / tokensPerMs));
+            const resetTime = new Date(nowMs + Math.ceil((limit - tokens) / tokensPerMs));
 
             return { limited, remaining, resetTime, retryAfterMs };
         },
 
         ttlMs(limit: number) {
-            const capacity = bucketSize ?? limit;
-            return Math.ceil(capacity / tokensPerMs);
+            return Math.ceil(limit / tokensPerMs);
         }
     };
 }
@@ -701,7 +700,6 @@ function resolveAlgorithm(options: RateLimitOptions): Algorithm {
             case 'token-bucket': {
                 return tokenBucket({
                     refillRate: options.algorithm.refillRate,
-                    bucketSize: options.algorithm.bucketSize,
                     refillMs: options.algorithm.refillMs
                 });
             }

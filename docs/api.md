@@ -13,20 +13,20 @@ const result: RateLimitResult = await limiter(request);
 
 **Parameters:**
 
-| Option          | Type                                                                                      | Default                | Description                    |
-| --------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------ |
-| `limit`         | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window    |
-| `algorithm`     | `AlgorithmConfig \| Algorithm`                                                            | sliding-window (60s)   | Rate limiting algorithm        |
-| `cost`          | `number \| (req: Request) => number \| Promise<number>`                                   | `1`                    | Units to consume per request   |
-| `headers`       | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version           |
-| `legacyHeaders` | `boolean`                                                                                 | `false`                | Include X-RateLimit-\* headers |
-| `store`         | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend                |
-| `keyGenerator`  | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier      |
-| `skip`          | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting             |
-| `handler`       | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler        |
-| `message`       | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body                  |
-| `statusCode`    | `number`                                                                                  | `429`                  | HTTP status code               |
-| `failOpen`      | `boolean`                                                                                 | `false`                | Fail open on store errors      |
+| Option          | Type                                                                                      | Default                | Description                                                       |
+| --------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `limit`         | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window (or bucket capacity for token-bucket) |
+| `algorithm`     | `AlgorithmConfig \| Algorithm`                                                            | sliding-window (60s)   | Rate limiting algorithm                                           |
+| `cost`          | `number \| (req: Request) => number \| Promise<number>`                                   | `1`                    | Units to consume per request                                      |
+| `headers`       | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version                                              |
+| `legacyHeaders` | `boolean`                                                                                 | `false`                | Include X-RateLimit-\* headers                                    |
+| `store`         | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend                                                   |
+| `keyGenerator`  | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier                                         |
+| `skip`          | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting                                                |
+| `handler`       | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler                                           |
+| `message`       | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body                                                     |
+| `statusCode`    | `number`                                                                                  | `429`                  | HTTP status code                                                  |
+| `failOpen`      | `boolean`                                                                                 | `false`                | Fail open on store errors                                         |
 
 **Returns:** `(request: Request) => Promise<RateLimitResult>`
 
@@ -173,7 +173,7 @@ interface ConsumeResult {
 ## Types
 
 ```ts
-type AlgorithmConfig = { type: 'fixed-window'; windowMs: number } | { type: 'sliding-window'; windowMs: number } | { type: 'token-bucket'; refillRate: number; bucketSize?: number; refillMs?: number };
+type AlgorithmConfig = { type: 'fixed-window'; windowMs: number } | { type: 'sliding-window'; windowMs: number } | { type: 'token-bucket'; refillRate: number; refillMs?: number };
 
 type HeadersVersion = 'draft-6' | 'draft-7';
 ```
