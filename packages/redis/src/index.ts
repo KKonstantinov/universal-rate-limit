@@ -139,15 +139,13 @@ const tokenBucketHandler: ScriptHandler = {
     buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
         const refillRate = algorithm.config.refillRate;
         const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
-        const capacity = 'bucketSize' in algorithm.config ? Number(algorithm.config.bucketSize) : limit;
-        return [fullKey, String(refillRate), String(capacity), String(nowMs), String(cost), String(refillMs)];
+        return [fullKey, String(refillRate), String(limit), String(nowMs), String(cost), String(refillMs)];
     },
 
     buildPeekArgs(fullKey, algorithm, limit, nowMs) {
         const refillRate = algorithm.config.refillRate;
         const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
-        const capacity = 'bucketSize' in algorithm.config ? Number(algorithm.config.bucketSize) : limit;
-        return [fullKey, String(refillRate), String(capacity), String(nowMs), String(refillMs)];
+        return [fullKey, String(refillRate), String(limit), String(nowMs), String(refillMs)];
     },
 
     parseConsumeResult(reply) {

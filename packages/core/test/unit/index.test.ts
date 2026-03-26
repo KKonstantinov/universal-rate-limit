@@ -1554,34 +1554,33 @@ describe('hardened interfaces', () => {
         });
     });
 
-    // ── 8. tokenBucket with bucketSize ───────────────────────────────────
+    // ── 8. tokenBucket capacity (controlled by limit) ──────────────────
 
-    describe('tokenBucket with bucketSize', () => {
-        it('bucketSize limits capacity independently from limit', () => {
-            // limit=100 but bucketSize=5 — bucket holds max 5 tokens
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 5 });
+    describe('tokenBucket capacity via limit', () => {
+        it('limit controls bucket capacity', () => {
+            const algo = tokenBucket({ refillRate: 10 });
 
-            const { result: r1 } = algo.consume(undefined, 100, 5000);
+            const { result: r1 } = algo.consume(undefined, 5, 5000);
             expect(r1.limited).toBe(false);
-            // Bucket started at bucketSize (5), consumed 1 → 4 remaining
+            // Bucket started at limit (5), consumed 1 → 4 remaining
             expect(r1.remaining).toBe(4);
         });
 
-        it('bucketSize caps token refill', () => {
+        it('limit caps token refill', () => {
             vi.useFakeTimers();
             try {
-                const algo = tokenBucket({ refillRate: 10, bucketSize: 5 });
+                const algo = tokenBucket({ refillRate: 10 });
 
-                // Exhaust all 5 tokens
+                // Exhaust all 5 tokens (limit=5)
                 let state: unknown;
                 for (let i = 0; i < 5; i++) {
-                    const { next } = algo.consume(state, 100, 5000);
+                    const { next } = algo.consume(state, 5, 5000);
                     state = next;
                 }
 
-                // Wait long enough to refill more than bucketSize
-                // 10 tokens/sec * 2s = 20 tokens, but capped at bucketSize=5
-                const { result } = algo.consume(state, 100, 7000);
+                // Wait long enough to refill more than limit
+                // 10 tokens/sec * 2s = 20 tokens, but capped at limit=5
+                const { result } = algo.consume(state, 5, 7000);
                 expect(result.limited).toBe(false);
                 expect(result.remaining).toBe(4); // min(5, refilled) - 1 consumed = 4
             } finally {
@@ -1589,54 +1588,39 @@ describe('hardened interfaces', () => {
             }
         });
 
-        it('blocks when bucketSize tokens exhausted even though limit is higher', () => {
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 3 });
+        it('blocks when limit tokens exhausted', () => {
+            const algo = tokenBucket({ refillRate: 10 });
 
             let state: unknown;
             for (let i = 0; i < 3; i++) {
-                const { next } = algo.consume(state, 100, 5000);
+                const { next } = algo.consume(state, 3, 5000);
                 state = next;
             }
 
-            const { result } = algo.consume(state, 100, 5000);
+            const { result } = algo.consume(state, 3, 5000);
             expect(result.limited).toBe(true);
             expect(result.remaining).toBe(0);
         });
 
-        it('without bucketSize, capacity defaults to limit', () => {
-            const algo = tokenBucket({ refillRate: 10 });
-
-            const { result } = algo.consume(undefined, 10, 5000);
-            expect(result.remaining).toBe(9); // limit=10, consumed 1 → 9
-        });
-
-        it('config includes bucketSize when provided', () => {
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 50 });
-            expect(algo.config).toHaveProperty('refillRate', 10);
-            expect(algo.config).toHaveProperty('bucketSize', 50);
-        });
-
-        it('config does not include bucketSize when not provided', () => {
+        it('config does not include bucketSize', () => {
             const algo = tokenBucket({ refillRate: 10 });
             expect(algo.config).toHaveProperty('refillRate', 10);
             expect(algo.config).not.toHaveProperty('bucketSize');
         });
 
-        it('ttlMs uses bucketSize when provided', () => {
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 50 });
-            // ttlMs should be based on bucketSize, not limit
-            // ceil(50 / 10 * 1000) = 5000
-            expect(algo.ttlMs(100)).toBe(5000);
+        it('ttlMs uses limit', () => {
+            const algo = tokenBucket({ refillRate: 10 });
+            // ttlMs based on limit: ceil(50 / 10 * 1000) = 5000
+            expect(algo.ttlMs(50)).toBe(5000);
         });
 
-        it('through rateLimit factory with bucketSize', async () => {
+        it('through rateLimit factory with limit as capacity', async () => {
             const limiter = rateLimit({
-                limit: 100,
-                algorithm: { type: 'token-bucket', refillRate: 10, bucketSize: 3 }
+                limit: 3,
+                algorithm: { type: 'token-bucket', refillRate: 10 }
             });
             const req = createRequest();
 
-            // Only 3 tokens available despite limit=100
             const r1 = await limiter(req);
             expect(r1.remaining).toBe(2);
 
@@ -1744,15 +1728,15 @@ describe('hardened interfaces', () => {
             expect(result.headers['RateLimit-Policy']).toBe('100;w=300');
         });
 
-        it('refillMs with bucketSize (9.3a.7)', () => {
-            const algo = tokenBucket({ refillRate: 10, refillMs: 2000, bucketSize: 20 });
+        it('refillMs with limit as capacity (9.3a.7)', () => {
+            const algo = tokenBucket({ refillRate: 10, refillMs: 2000 });
 
-            // Capacity is 20 (not limit)
-            const { result } = algo.consume(undefined, 100, 5000);
-            expect(result.remaining).toBe(19); // bucketSize(20) - 1
+            // Capacity is limit=20
+            const { result } = algo.consume(undefined, 20, 5000);
+            expect(result.remaining).toBe(19); // limit(20) - 1
 
             // ttlMs = ceil(20 / (10/2000)) = ceil(20 / 0.005) = 4000
-            expect(algo.ttlMs(100)).toBe(4000);
+            expect(algo.ttlMs(20)).toBe(4000);
         });
 
         it('validation: refillMs=0 throws RangeError (9.3a.8)', () => {

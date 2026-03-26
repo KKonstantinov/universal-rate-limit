@@ -112,17 +112,17 @@ The token-bucket algorithm allows steady-rate traffic with burst capacity:
 import { rateLimit, tokenBucket } from 'universal-rate-limit';
 
 const limiter = rateLimit({
-    algorithm: tokenBucket({ refillRate: 10, bucketSize: 100 }),
-    limit: 100
+    limit: 100,
+    algorithm: tokenBucket({ refillRate: 10 })
 });
 ```
 
-You can also use config objects instead of factory functions:
+The `limit` option controls the bucket capacity — how many tokens the bucket holds. You can also use config objects instead of factory functions:
 
 ```ts
 const limiter = rateLimit({
-    algorithm: { type: 'token-bucket', refillRate: 10, bucketSize: 100 },
-    limit: 100
+    limit: 100,
+    algorithm: { type: 'token-bucket', refillRate: 10 }
 });
 ```
 

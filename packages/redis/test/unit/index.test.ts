@@ -754,41 +754,41 @@ describe('RedisStore', () => {
         });
     });
 
-    describe('tokenBucket with bucketSize', () => {
-        it('bucketSize limits capacity independently from limit', async () => {
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 5 });
+    describe('tokenBucket capacity via limit', () => {
+        it('limit controls bucket capacity', async () => {
+            const algo = tokenBucket({ refillRate: 10 });
 
-            const r1 = await redisStore.consume('test-key', algo, 100);
+            const r1 = await redisStore.consume('test-key', algo, 5);
             expect(r1.limited).toBe(false);
-            expect(r1.remaining).toBe(4); // bucket=5, consumed 1 → 4
+            expect(r1.remaining).toBe(4); // limit=5, consumed 1 → 4
         });
 
-        it('blocks when bucketSize tokens exhausted despite high limit', async () => {
-            const algo = tokenBucket({ refillRate: 10, bucketSize: 3 });
+        it('blocks when limit tokens exhausted', async () => {
+            const algo = tokenBucket({ refillRate: 10 });
 
             for (let i = 0; i < 3; i++) {
-                await redisStore.consume('test-key', algo, 100);
+                await redisStore.consume('test-key', algo, 3);
             }
 
-            const result = await redisStore.consume('test-key', algo, 100);
+            const result = await redisStore.consume('test-key', algo, 3);
             expect(result.limited).toBe(true);
             expect(result.remaining).toBe(0);
         });
 
-        it('refills up to bucketSize, not limit', async () => {
+        it('refills up to limit', async () => {
             vi.useFakeTimers();
             try {
-                const algo = tokenBucket({ refillRate: 10, bucketSize: 5 });
+                const algo = tokenBucket({ refillRate: 10 });
 
-                // Exhaust all 5 tokens
+                // Exhaust all 5 tokens (limit=5)
                 for (let i = 0; i < 5; i++) {
-                    await redisStore.consume('test-key', algo, 100);
+                    await redisStore.consume('test-key', algo, 5);
                 }
 
-                // Wait 2 seconds — would refill 20 tokens but capped at bucketSize=5
+                // Wait 2 seconds — would refill 20 tokens but capped at limit=5
                 vi.advanceTimersByTime(2000);
 
-                const result = await redisStore.consume('test-key', algo, 100);
+                const result = await redisStore.consume('test-key', algo, 5);
                 expect(result.limited).toBe(false);
                 expect(result.remaining).toBe(4); // min(5, refilled) - 1 = 4
             } finally {
@@ -796,10 +796,10 @@ describe('RedisStore', () => {
             }
         });
 
-        it('works through rateLimit factory with bucketSize', async () => {
+        it('works through rateLimit factory with limit as capacity', async () => {
             const limiter = rateLimit({
-                limit: 100,
-                algorithm: { type: 'token-bucket', refillRate: 10, bucketSize: 2 },
+                limit: 2,
+                algorithm: { type: 'token-bucket', refillRate: 10 },
                 store: redisStore
             });
 
