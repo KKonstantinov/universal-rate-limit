@@ -48,7 +48,7 @@ tests/
   integration/                # Cross-package integration tests
   bun/                        # Bun runtime tests
   deno/                       # Deno runtime tests
-docs/                         # VitePress documentation
+packages/site/                # Fumadocs documentation (Next.js)
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and internal details.
@@ -120,7 +120,7 @@ The project uses ESLint v10 with:
 
 1. Implement the `Store` interface from `universal-rate-limit`
 2. Add tests covering `increment`, `decrement`, `resetKey`, `resetAll`
-3. Document it in `docs/stores.md`
+3. Document it in `packages/site/content/docs/`
 
 ### Adding a New Middleware
 
@@ -128,7 +128,7 @@ The project uses ESLint v10 with:
 2. Add `package.json`, `tsconfig.json`, `vitest.config.ts`
 3. Implement the adapter in `src/index.ts`, importing from `universal-rate-limit`
 4. Add tests using a real server instance
-5. Document it in `docs/middleware.md`
+5. Document it in `packages/site/content/docs/`
 
 ## Submitting Changes
 

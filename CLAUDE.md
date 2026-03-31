@@ -28,6 +28,7 @@ Run tests for one package: `cd packages/core && pnpm test`
 - **`packages/core`** — `universal-rate-limit`: framework-agnostic rate limiter using Web Standard `Request`/`Response`. Zero dependencies. Exports `rateLimit()`, `MemoryStore`, `buildRateLimitResponse()`.
 - **`packages/redis`** — `@universal-rate-limit/redis`: Redis store using Lua scripts for atomic operations. Works with any Redis client via `SendCommandFn` abstraction.
 - **`packages/middleware/{express,fastify,hono,nextjs}`** — Thin adapters that convert framework requests to Web `Request`, call core, set headers, handle 429s.
+- **`packages/site`** — Documentation site built with [Fumadocs](https://www.fumadocs.dev/) (Next.js). Content lives in `packages/site/content/docs/`.
 - **`packages/benchmarks`** — Private package. Run with `pnpm bench`, `pnpm bench:throughput`, etc.
 
 ## Architecture
