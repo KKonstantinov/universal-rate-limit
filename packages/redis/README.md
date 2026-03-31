@@ -16,7 +16,7 @@ Redis store for [universal-rate-limit](https://www.npmjs.com/package/universal-r
 `universal-rate-limit` is a web-standards-based rate limiter with fixed-window, sliding-window, and token-bucket algorithms, IETF-compliant headers, and drop-in middleware for Express, Fastify, Hono, and Next.js. This package lets you back it with Redis for multi-instance
 deployments.
 
-> **[Try the playground](/playground)** to see rate limiting in action.
+> **[Try the playground](https://universal-rate-limit.vercel.app/playground)** to see rate limiting in action.
 
 ## Install
 

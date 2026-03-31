@@ -176,7 +176,10 @@ interface ConsumeResult {
 ## Types
 
 ```ts
-type AlgorithmConfig = { type: 'fixed-window'; windowMs: number } | { type: 'sliding-window'; windowMs: number } | { type: 'token-bucket'; refillRate: number; refillMs?: number };
+type AlgorithmConfig =
+    | { type: 'fixed-window'; windowMs: number }
+    | { type: 'sliding-window'; windowMs: number }
+    | { type: 'token-bucket'; refillRate: number; refillMs?: number };
 
 type HeadersVersion = 'draft-6' | 'draft-7';
 ```

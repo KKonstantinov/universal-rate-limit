@@ -1,8 +1,10 @@
-# Symlinked/included docs (VitePress @include directives)
-docs/packages/
-
 # Build output
 **/dist/
+**/.next/
+
+# Generated (fumadocs)
+packages/site/.source/
+packages/site/content/docs/packages/
 
 # Lock files
 pnpm-lock.yaml

@@ -46,7 +46,8 @@ flowchart LR
     D -->|Yes| F[429 + Retry-After]
 ```
 
-The core flow: every request is identified by a key (default: client IP), the store tracks consumption against the chosen algorithm, and the result includes IETF-compliant rate limit headers.
+The core flow: every request is identified by a key (default: client IP), the store tracks consumption against the chosen algorithm, and the
+result includes IETF-compliant rate limit headers.
 
 ## Basic Usage
 
@@ -77,20 +78,20 @@ if (result.limited) {
 
 All options are optional with sensible defaults:
 
-| Option          | Type                           | Default               | Description                                            |
-| --------------- | ------------------------------ | --------------------- | ------------------------------------------------------ |
-| `limit`         | `number \| (req) => number`    | `60`                  | Max requests per window (can be async)                 |
-| `algorithm`     | `AlgorithmConfig \| Algorithm` | sliding-window (60s)  | Rate limiting algorithm (config object or instance)    |
-| `cost`          | `number \| (req) => number`    | `1`                   | Units to consume per request (can be async)            |
-| `headers`       | `'draft-7' \| 'draft-6'`       | `'draft-7'`           | IETF rate limit headers version                        |
-| `legacyHeaders` | `boolean`                      | `false`               | Include `X-RateLimit-*` headers                        |
+| Option          | Type                           | Default               | Description                                                 |
+| --------------- | ------------------------------ | --------------------- | ----------------------------------------------------------- |
+| `limit`         | `number \| (req) => number`    | `60`                  | Max requests per window (can be async)                      |
+| `algorithm`     | `AlgorithmConfig \| Algorithm` | sliding-window (60s)  | Rate limiting algorithm (config object or instance)         |
+| `cost`          | `number \| (req) => number`    | `1`                   | Units to consume per request (can be async)                 |
+| `headers`       | `'draft-7' \| 'draft-6'`       | `'draft-7'`           | IETF rate limit headers version                             |
+| `legacyHeaders` | `boolean`                      | `false`               | Include `X-RateLimit-*` headers                             |
 | `store`         | `Store`                        | `MemoryStore`         | Storage backend ([Redis](/docs/stores#redis-store), custom) |
-| `keyGenerator`  | `(req) => string`              | IP-based              | Extract client identifier                              |
-| `skip`          | `(req) => boolean`             | `undefined`           | Skip rate limiting for certain requests                |
-| `handler`       | `(req, result) => Response`    | `undefined`           | Custom 429 response handler                            |
-| `message`       | `string \| object \| function` | `'Too Many Requests'` | Response body when limited                             |
-| `statusCode`    | `number`                       | `429`                 | HTTP status code when limited                          |
-| `failOpen`      | `boolean`                      | `false`               | Fail open if the store errors                          |
+| `keyGenerator`  | `(req) => string`              | IP-based              | Extract client identifier                                   |
+| `skip`          | `(req) => boolean`             | `undefined`           | Skip rate limiting for certain requests                     |
+| `handler`       | `(req, result) => Response`    | `undefined`           | Custom 429 response handler                                 |
+| `message`       | `string \| object \| function` | `'Too Many Requests'` | Response body when limited                                  |
+| `statusCode`    | `number`                       | `429`                 | HTTP status code when limited                               |
+| `failOpen`      | `boolean`                      | `false`               | Fail open if the store errors                               |
 
 ## Algorithms
 
@@ -151,7 +152,8 @@ const limiter = rateLimit({
 });
 ```
 
-The `limit` option controls the bucket capacity — how many tokens the bucket holds. You can also use config objects instead of factory functions:
+The `limit` option controls the bucket capacity — how many tokens the bucket holds. You can also use config objects instead of factory
+functions:
 
 ```ts
 const limiter = rateLimit({
@@ -162,7 +164,8 @@ const limiter = rateLimit({
 
 ## Custom Key Generator
 
-By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`). Override this for custom logic:
+By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`).
+Override this for custom logic:
 
 ```ts
 const limiter = rateLimit({
@@ -215,7 +218,10 @@ Or use a handler function for full control:
 ```ts
 const limiter = rateLimit({
     handler: (request, result) => {
-        return new Response(JSON.stringify({ error: 'Too many requests', reset: result.resetTime }), { status: 429, headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ error: 'Too many requests', reset: result.resetTime }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 });
 ```

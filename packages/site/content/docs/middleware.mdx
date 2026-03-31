@@ -3,7 +3,8 @@ title: Middleware
 description: Framework-specific middleware adapters for Express, Fastify, Hono, and Next.js.
 ---
 
-Each framework adapter is a separate package that wraps the core `rateLimit` function. All adapters accept the same `RateLimitOptions` plus framework-specific options.
+Each framework adapter is a separate package that wraps the core `rateLimit` function. All adapters accept the same `RateLimitOptions` plus
+framework-specific options.
 
 ```mermaid
 flowchart LR
@@ -178,13 +179,15 @@ RateLimit-Reset: 58
 
 ### Retry-After
 
-When a request is rate-limited (429), a [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) header is automatically included using the delay-seconds format:
+When a request is rate-limited (429), a [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) header is automatically
+included using the delay-seconds format:
 
 ```
 Retry-After: 58
 ```
 
-This is a standard HTTP header (RFC 9110 §10.2.3) that tells clients how many seconds to wait before retrying. It is included regardless of which draft version is configured.
+This is a standard HTTP header (RFC 9110 §10.2.3) that tells clients how many seconds to wait before retrying. It is included regardless of
+which draft version is configured.
 
 Switch between header versions with the `headers` option:
 

@@ -18,7 +18,7 @@
 
 ---
 
-**[Try it in the playground](/playground)** — configure limits, fire requests, and see rate limiting in action.
+**[Try it in the playground](https://universal-rate-limit.vercel.app/playground)** — configure limits, fire requests, and see rate limiting in action.
 
 ## Why universal-rate-limit?
 
