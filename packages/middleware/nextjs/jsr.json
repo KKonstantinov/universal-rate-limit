@@ -1,12 +1,12 @@
 {
     "name": "@universal-rate-limit/nextjs",
-    "version": "2.0.3",
+    "version": "2.0.4",
     "license": "MIT",
     "exports": {
         ".": "./src/index.ts"
     },
     "imports": {
-        "universal-rate-limit": "npm:universal-rate-limit@^2.1.0",
+        "universal-rate-limit": "npm:universal-rate-limit@^2.1.1",
         "next": "npm:next@^14.0.0"
     },
     "publish": {
