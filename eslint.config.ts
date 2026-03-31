@@ -13,14 +13,13 @@ export default tseslint.config(
             'packages/core/test/bun/**',
             'packages/core/test/deno/**',
             'scripts/',
-            'docs/.vitepress/cache/',
-            'docs/.vitepress/dist/',
-            'docs/.vitepress/config.ts',
             'examples/nextjs/.next/',
             'examples/nextjs/next-env.d.ts',
-            'packages/playground/.next/',
-            'packages/playground/next-env.d.ts',
-            'packages/playground/postcss.config.mjs'
+            'packages/site/.next/',
+            'packages/site/.source/',
+            'packages/site/next-env.d.ts',
+            'packages/site/*.config.*',
+            'packages/site/scripts/'
         ]
     },
     eslint.configs.recommended,
@@ -57,6 +56,7 @@ export default tseslint.config(
             'packages/core/test/**/*.ts',
             'packages/redis/test/**/*.ts',
             'packages/middleware/*/test/**/*.ts',
+            'packages/site/test/**/*.ts',
             'examples/*/test/**/*.ts',
             'examples/shared/**/*.ts'
         ],
@@ -71,6 +71,16 @@ export default tseslint.config(
             '@typescript-eslint/restrict-template-expressions': 'off',
             '@typescript-eslint/no-confusing-void-expression': 'off',
             'unicorn/no-useless-undefined': 'off'
+        }
+    },
+    // Site app uses its own tsconfig (JSX + DOM types)
+    {
+        files: ['packages/site/src/**/*.ts', 'packages/site/src/**/*.tsx'],
+        languageOptions: {
+            parserOptions: {
+                project: 'packages/site/tsconfig.typecheck.json',
+                tsconfigRootDir: import.meta.dirname
+            }
         }
     },
     prettier

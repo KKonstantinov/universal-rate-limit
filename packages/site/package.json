@@ -1,0 +1,33 @@
+{
+    "name": "@universal-rate-limit/site",
+    "version": "0.0.1",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "predev": "node scripts/sync-readmes.js",
+        "dev": "next dev --turbopack",
+        "prebuild": "node scripts/sync-readmes.js",
+        "build": "next build",
+        "test": "vitest run",
+        "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+    },
+    "dependencies": {
+        "universal-rate-limit": "workspace:*",
+        "@markdown-for-agents/nextjs": "^1.0.0",
+        "fumadocs-core": "^16.7.7",
+        "fumadocs-mdx": "^14.2.11",
+        "fumadocs-ui": "^16.7.7",
+        "next": "^16.1.6",
+        "next-themes": "^0.4.6",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tailwindcss": "^4.2.1",
+        "@tailwindcss/postcss": "^4.2.1",
+        "mermaid": "^11.13.0"
+    },
+    "devDependencies": {
+        "@types/mdx": "^2.0.13",
+        "@types/react": "^19.2.3",
+        "@types/react-dom": "^19.2.3"
+    }
+}

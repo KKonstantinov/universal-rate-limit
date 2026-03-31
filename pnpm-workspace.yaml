@@ -3,7 +3,10 @@ packages:
     - packages/redis
     - packages/middleware/*
     - packages/benchmarks
-    - packages/playground
+    - packages/site
     - examples/*
+
+overrides:
+    esbuild: '>=0.25.0'
 
 onlyBuiltDependencies: '["lefthook", "esbuild"]'

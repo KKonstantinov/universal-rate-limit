@@ -1,0 +1,95 @@
+---
+title: universal-rate-limit
+description: Web-standards-based rate limiting with pluggable stores and framework middleware. Zero dependencies, works everywhere.
+---
+
+![universal-rate-limit](https://raw.githubusercontent.com/kkonstantinov/universal-rate-limit/main/universal-rate-limit-header.png)
+
+<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <a href="https://www.npmjs.com/package/universal-rate-limit">
+        <img src="https://img.shields.io/npm/v/universal-rate-limit.svg" alt="npm version" />
+    </a>
+    <a href="https://www.npmjs.com/package/universal-rate-limit">
+        <img src="https://img.shields.io/npm/dm/universal-rate-limit.svg" alt="npm downloads" />
+    </a>
+    <a href="https://www.npmjs.com/package/universal-rate-limit">
+        <img src="https://img.shields.io/npm/types/universal-rate-limit.svg" alt="types" />
+    </a>
+    <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE">
+        <img src="https://img.shields.io/npm/l/universal-rate-limit.svg" alt="license" />
+    </a>
+</div>
+
+**[Try the playground](/playground)** to configure limits, fire requests, and see rate limiting in action — right in your browser.
+
+## Quick Start
+
+```bash
+npm install universal-rate-limit
+```
+
+```ts
+import { rateLimit } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
+    limit: 60 // 60 requests per window
+});
+
+const result = await limiter(request);
+
+if (result.limited) {
+    return new Response('Too Many Requests', {
+        status: 429,
+        headers: result.headers
+    });
+}
+```
+
+## Middleware
+
+Rate limit any framework with a single line:
+
+```ts
+// Express
+import { expressRateLimit } from '@universal-rate-limit/express';
+app.use(expressRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
+
+// Hono
+import { honoRateLimit } from '@universal-rate-limit/hono';
+app.use(honoRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
+```
+
+## Redis Store
+
+Scale across multiple instances with the official Redis store:
+
+```ts
+import { rateLimit } from 'universal-rate-limit';
+import { RedisStore } from '@universal-rate-limit/redis';
+
+const limiter = rateLimit({
+    algorithm: { type: 'sliding-window', windowMs: 60_000 },
+    limit: 60,
+    store: new RedisStore({
+        sendCommand: (...args) => redis.call(...args)
+    })
+});
+```
+
+## Packages
+
+| Package                                                   | Description                |
+| --------------------------------------------------------- | -------------------------- |
+| [`universal-rate-limit`](/docs/packages/core)             | Core rate limiting library |
+| [`@universal-rate-limit/redis`](/docs/packages/redis)     | Redis store                |
+| [`@universal-rate-limit/express`](/docs/packages/express) | Express middleware         |
+| [`@universal-rate-limit/fastify`](/docs/packages/fastify) | Fastify plugin             |
+| [`@universal-rate-limit/hono`](/docs/packages/hono)       | Hono middleware            |
+| [`@universal-rate-limit/nextjs`](/docs/packages/nextjs)   | Next.js App Router wrapper |
+
+## Acknowledgements
+
+Inspired by [express-rate-limit](https://github.com/express-rate-limit/express-rate-limit) — the most popular rate limiting middleware for
+Express.js. universal-rate-limit builds on its proven API design while extending it to work across frameworks and runtimes with Web Standard
+APIs.
