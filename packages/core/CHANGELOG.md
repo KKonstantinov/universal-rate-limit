@@ -1,5 +1,11 @@
 # universal-rate-limit
 
+## 2.1.1
+
+### Patch Changes
+
+- [#13](https://github.com/KKonstantinov/universal-rate-limit/pull/13) [`8432f1e`](https://github.com/KKonstantinov/universal-rate-limit/commit/8432f1eb51cc3145bde287d786edcb734b31b889) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - migrate docs
+
 ## 2.1.0
 
 ### Minor Changes
