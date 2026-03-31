@@ -40,7 +40,7 @@
         "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
         "directory": "packages/redis"
     },
-    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/redis#readme",
+    "homepage": "https://universal-rate-limit.vercel.app",
     "bugs": {
         "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
     },

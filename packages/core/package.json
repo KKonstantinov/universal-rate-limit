@@ -46,7 +46,7 @@
         "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
         "directory": "packages/core"
     },
-    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/core#readme",
+    "homepage": "https://universal-rate-limit.vercel.app",
     "bugs": {
         "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
     },

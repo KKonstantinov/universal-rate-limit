@@ -47,7 +47,7 @@
         "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
         "directory": "packages/middleware/hono"
     },
-    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/middleware/hono#readme",
+    "homepage": "https://universal-rate-limit.vercel.app",
     "bugs": {
         "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
     },

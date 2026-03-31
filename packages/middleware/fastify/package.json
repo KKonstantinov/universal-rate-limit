@@ -48,7 +48,7 @@
         "url": "git+https://github.com/KKonstantinov/universal-rate-limit.git",
         "directory": "packages/middleware/fastify"
     },
-    "homepage": "https://github.com/KKonstantinov/universal-rate-limit/tree/main/packages/middleware/fastify#readme",
+    "homepage": "https://universal-rate-limit.vercel.app",
     "bugs": {
         "url": "https://github.com/KKonstantinov/universal-rate-limit/issues"
     },
