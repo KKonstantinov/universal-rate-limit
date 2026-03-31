@@ -19,10 +19,10 @@
 Rate limit any HTTP endpoint using the Web Standards `Request`/`Response` API — with built-in support for Express, Fastify, Hono, and Next.js. Swap between fixed-window, sliding-window, and token-bucket algorithms, bring your own store, and get IETF-compliant rate limit headers
 out of the box.
 
-**[Try it in the playground](https://universal-rate-limit-playground.vercel.app)** — configure limits, fire requests, and see rate limiting in action.
+**[Try it in the playground](https://universal-rate-limit.vercel.app/playground)** — configure limits, fire requests, and see rate limiting in action.
 
 <p align="center">
-  <a href="https://kkonstantinov.github.io/universal-rate-limit/"><strong>Documentation</strong></a> · <a href="https://universal-rate-limit-playground.vercel.app"><strong>Playground</strong></a> · <a href="https://github.com/KKonstantinov/universal-rate-limit"><strong>GitHub</strong></a>
+  <a href="https://universal-rate-limit.vercel.app/docs"><strong>Documentation</strong></a> · <a href="https://universal-rate-limit.vercel.app/playground"><strong>Playground</strong></a> · <a href="https://github.com/KKonstantinov/universal-rate-limit"><strong>GitHub</strong></a>
 </p>
 
 ## Features
@@ -161,7 +161,7 @@ This is a monorepo managed with [pnpm workspaces](https://pnpm.io/workspaces):
 
 ## Documentation
 
-**[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)** | **[Playground](https://universal-rate-limit-playground.vercel.app)**
+**[View the full documentation](https://universal-rate-limit.vercel.app/docs)** | **[Playground](https://universal-rate-limit.vercel.app/playground)**
 
 - [Getting Started](docs/getting-started.md) — installation, first limiter, common patterns
 - [Middleware](docs/middleware.md) — Express, Fastify, Hono, and Next.js adapters

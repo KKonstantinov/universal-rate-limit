@@ -17,14 +17,12 @@
         "packages/middleware/*/*.config.ts",
         "packages/benchmarks/src",
         "packages/benchmarks/*.config.ts",
-        "packages/playground/src/**/*.ts",
-        "packages/playground/src/**/*.tsx",
-        "packages/playground/test",
-        "packages/playground/*.config.ts",
+        "packages/site/src/**/*.ts",
+        "packages/site/src/**/*.tsx",
+        "packages/site/test/**/*.ts",
         "examples/*/src",
         "examples/*/test",
         "examples/*/*.config.ts",
-        "docs/.vitepress/theme",
         "*.config.ts"
     ],
     "exclude": ["node_modules", "**/dist", "**/node_modules"]

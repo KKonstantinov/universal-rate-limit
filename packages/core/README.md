@@ -9,7 +9,6 @@
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/dm/universal-rate-limit.svg" alt="npm downloads" /></a>
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/types/universal-rate-limit.svg" alt="types" /></a>
   <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/universal-rate-limit.svg" alt="license" /></a>
-  <a href="https://bundlephobia.com/package/universal-rate-limit"><img src="https://img.shields.io/bundlephobia/minzip/universal-rate-limit" alt="bundle size" /></a>
 </p>
 
 <p align="center">
@@ -19,7 +18,7 @@
 
 ---
 
-**[Try it in the playground](https://universal-rate-limit-playground.vercel.app)** — configure limits, fire requests, and see rate limiting in action.
+**[Try it in the playground](/playground)** — configure limits, fire requests, and see rate limiting in action.
 
 ## Why universal-rate-limit?
 
@@ -134,7 +133,7 @@ Drop-in adapters are available as separate packages:
 
 ## Documentation
 
-**[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**
+**[View the full documentation](https://universal-rate-limit.vercel.app/docs)**
 
 ## License
 

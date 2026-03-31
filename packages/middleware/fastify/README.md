@@ -14,7 +14,7 @@
 Fastify plugin for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window, sliding-window, and token-bucket algorithms, pluggable stores (memory, Redis, or your own), and
 IETF-compliant rate limit headers out of the box.
 
-> **[Try the playground](https://universal-rate-limit-playground.vercel.app)** to see rate limiting in action.
+> **[Try the playground](/playground)** to see rate limiting in action.
 
 ## Install
 
@@ -52,7 +52,7 @@ See [`examples/fastify`](https://github.com/kkonstantinov/universal-rate-limit/t
 
 ## Documentation
 
-**[View the full documentation](https://kkonstantinov.github.io/universal-rate-limit/)**
+**[View the full documentation](https://universal-rate-limit.vercel.app/docs)**
 
 ## License
 
