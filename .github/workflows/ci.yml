@@ -16,7 +16,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
             - uses: actions/setup-node@v6
               with:
                   node-version: 24
@@ -36,7 +36,7 @@ jobs:
                 node-version: [20, 22, 24]
         steps:
             - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
             - uses: actions/setup-node@v6
               with:
                   node-version: ${{ matrix.node-version }}
@@ -50,7 +50,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
             - uses: actions/setup-node@v6
               with:
                   node-version: 24
@@ -65,7 +65,7 @@ jobs:
         needs: test
         steps:
             - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
             - uses: actions/setup-node@v6
               with:
                   node-version: 24
@@ -86,14 +86,14 @@ jobs:
                 runtime: [node, bun, deno]
         steps:
             - uses: actions/checkout@v6
-            - uses: pnpm/action-setup@v4
+            - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
             - uses: actions/setup-node@v6
               with:
                   node-version: 24
                   cache: pnpm
-            - uses: oven-sh/setup-bun@v2
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
               if: matrix.runtime == 'bun'
-            - uses: denoland/setup-deno@v2
+            - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
               if: matrix.runtime == 'deno'
               with:
                   deno-version: v2.x
