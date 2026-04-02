@@ -11,7 +11,7 @@ export type {
     AlgorithmConfig,
     MemoryStoreOptions
 } from 'universal-rate-limit';
-export { MemoryStore, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
+export { MemoryStore, fixedWindow, slidingWindow, tokenBucket, IP_HEADERS, extractClientIp } from 'universal-rate-limit';
 
 /** Rate limit options for the Express middleware adapter. */
 export type ExpressRateLimitOptions = RateLimitOptions<ExpressRequest>;

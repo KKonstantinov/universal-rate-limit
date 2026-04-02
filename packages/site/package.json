@@ -9,6 +9,7 @@
         "prebuild": "node scripts/sync-readmes.js",
         "build": "next build",
         "test": "vitest run",
+        "sync": "node scripts/sync-readmes.js",
         "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
     },
     "dependencies": {

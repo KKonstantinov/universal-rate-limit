@@ -73,7 +73,8 @@ rateLimit({
     handler: undefined, // Custom 429 response handler
     message: 'Too Many Requests', // Response body (string, object, or function)
     statusCode: 429, // HTTP status code when limited
-    failOpen: false // Fail open if store errors
+    failOpen: false, // Fail open if store errors
+    prefix: undefined // Namespace prefix for multiple limiters on one store
 });
 ```
 

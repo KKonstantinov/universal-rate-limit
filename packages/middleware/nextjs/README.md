@@ -76,7 +76,7 @@ export async function middleware(request: Request) {
 
 ## Options
 
-Both `withRateLimit` and `nextjsRateLimit` accept all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, and `failOpen`.
+Both `withRateLimit` and `nextjsRateLimit` accept all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, `failOpen`, and `prefix`.
 
 ## Example
 
