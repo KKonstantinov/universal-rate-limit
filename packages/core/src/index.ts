@@ -123,7 +123,15 @@ export type AlgorithmConfig =
  * use a Redis-backed store for distributed environments.
  */
 export interface Store {
-    /** Key prefix prepended to every rate limit key in the store. */
+    /**
+     * Key prefix prepended to every rate limit key in the store.
+     *
+     * This is applied by the store itself, after the limiter has already
+     * resolved its own key (which may include a {@link RateLimitOptions.prefix}).
+     * The final storage key is `<store prefix><limiter prefix>:<IP>` — e.g.
+     * `rl:auth:203.0.113.1` when the store prefix is `'rl:'` and the limiter
+     * prefix is `'auth'`.
+     */
     prefix?: string;
 
     /**
@@ -245,6 +253,19 @@ export interface RateLimitOptions<TRequest = Request> {
      * @default 1
      */
     cost?: number | ((request: TRequest) => number | Promise<number>);
+    /**
+     * A string prepended to the key from `keyGenerator` to namespace this
+     * limiter's counters. Useful when multiple limiters share the same store.
+     *
+     * The key passed to the store is `${prefix}:${keyGenerator(request)}`.
+     * If the store also has a prefix (e.g. `RedisStore({ prefix: 'rl:' })`),
+     * the store prepends its own prefix, giving a final storage key of
+     * `<store prefix><limiter prefix>:<IP>` — e.g. `rl:auth:203.0.113.1`.
+     *
+     * An empty string is treated as no prefix (same as omitting).
+     * When omitted, no prefix is added (backwards-compatible).
+     */
+    prefix?: string;
 }
 
 /** The outcome of evaluating a request against the rate limiter. */
@@ -274,10 +295,16 @@ export interface RateLimitResult {
 export const IP_HEADERS: readonly string[] = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip'];
 
 /**
- * Default key generator that extracts the client IP from well-known proxy
- * headers. Falls back to `'127.0.0.1'` when no header is present.
+ * Extract the client IP address from a Web Standard `Request` by checking
+ * well-known proxy / CDN headers ({@link IP_HEADERS}) in order.
+ *
+ * Returns the first IP found (before any comma in multi-value headers),
+ * or `'127.0.0.1'` when no header is present.
+ *
+ * Useful for building custom `keyGenerator` functions that need the IP
+ * as one component of a compound key.
  */
-function defaultKeyGenerator(request: Request): string {
+export function extractClientIp(request: Request): string {
     for (const header of IP_HEADERS) {
         const value = request.headers.get(header);
         if (value) {
@@ -885,7 +912,8 @@ export function rateLimit<TRequest = Request>(
     }
 
     const costOption = options.cost ?? 1;
-    const keyGenerator = options.keyGenerator ?? (defaultKeyGenerator as (request: TRequest) => string);
+    const keyGenerator = options.keyGenerator ?? (extractClientIp as (request: TRequest) => string);
+    const keyPrefix = options.prefix;
     const headersVersion = options.headers ?? 'draft-7';
     const legacyHeaders = options.legacyHeaders ?? false;
     const failOpen = options.failOpen ?? false;
@@ -989,7 +1017,8 @@ export function rateLimit<TRequest = Request>(
 
         const limit = typeof limitOption === 'function' ? await limitOption(request) : limitOption;
         const cost = typeof costOption === 'function' ? await costOption(request) : costOption;
-        const key = await keyGenerator(request);
+        const rawKey = await keyGenerator(request);
+        const key = keyPrefix ? keyPrefix + ':' + rawKey : rawKey;
         return runConsume(key, limit, now, cost);
     }
 
@@ -1016,10 +1045,15 @@ export function rateLimit<TRequest = Request>(
         const cost = costOption;
 
         // Resolve key
-        const key = keyGenerator(request);
-        if (isPromise(key)) {
-            return key.then(k => runConsume(k, limit, now, cost));
+        const rawKey = keyGenerator(request);
+        if (isPromise(rawKey)) {
+            return rawKey.then(k => {
+                const key = keyPrefix ? keyPrefix + ':' + k : k;
+                return runConsume(key, limit, now, cost);
+            });
         }
+
+        const key = keyPrefix ? keyPrefix + ':' + rawKey : rawKey;
 
         // Consume and build result — fully synchronous when store is sync
         return runConsume(key, limit, now, cost);

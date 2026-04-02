@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { rateLimit, MemoryStore, buildRateLimitResponse, fixedWindow, slidingWindow, tokenBucket } from '../../src/index.js';
+import {
+    rateLimit,
+    MemoryStore,
+    buildRateLimitResponse,
+    fixedWindow,
+    slidingWindow,
+    tokenBucket,
+    extractClientIp,
+    IP_HEADERS
+} from '../../src/index.js';
 import type { Store, RateLimitResult, Algorithm } from '../../src/index.js';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
@@ -1761,5 +1770,195 @@ describe('hardened interfaces', () => {
             expect(algo.config).toHaveProperty('refillRate', 10);
             expect(algo.config).toHaveProperty('refillMs', 1000);
         });
+    });
+});
+
+// ── extractClientIp ──────────────────────────────────────────────────────────
+
+describe('extractClientIp', () => {
+    it('extracts IP from x-forwarded-for', () => {
+        const req = new Request('http://localhost/', { headers: { 'x-forwarded-for': '10.0.0.1' } });
+        expect(extractClientIp(req)).toBe('10.0.0.1');
+    });
+
+    it('takes first IP from comma-separated x-forwarded-for', () => {
+        const req = new Request('http://localhost/', { headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2, 10.0.0.3' } });
+        expect(extractClientIp(req)).toBe('10.0.0.1');
+    });
+
+    it('trims whitespace from extracted IP', () => {
+        const req = new Request('http://localhost/', { headers: { 'x-forwarded-for': '  10.0.0.1 , 10.0.0.2' } });
+        expect(extractClientIp(req)).toBe('10.0.0.1');
+    });
+
+    it('falls back through header priority order', () => {
+        const req = new Request('http://localhost/', { headers: { 'cf-connecting-ip': '172.16.0.1' } });
+        expect(extractClientIp(req)).toBe('172.16.0.1');
+    });
+
+    it('prefers x-forwarded-for over other headers', () => {
+        const req = new Request('http://localhost/', {
+            headers: { 'x-forwarded-for': '10.0.0.1', 'x-real-ip': '10.0.0.2', 'cf-connecting-ip': '10.0.0.3' }
+        });
+        expect(extractClientIp(req)).toBe('10.0.0.1');
+    });
+
+    it('returns 127.0.0.1 when no proxy headers present', () => {
+        const req = new Request('http://localhost/');
+        expect(extractClientIp(req)).toBe('127.0.0.1');
+    });
+
+    it('checks all IP_HEADERS constants', () => {
+        expect(IP_HEADERS).toEqual(['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'fly-client-ip']);
+    });
+});
+
+// ── prefix option ────────────────────────────────────────────────────────────
+
+describe('prefix option', () => {
+    it('namespaces limiters sharing the same store', async () => {
+        const store = new MemoryStore();
+        const limiterA = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            prefix: 'route-a',
+            store
+        });
+        const limiterB = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            prefix: 'route-b',
+            store
+        });
+
+        const req = createRequest('50.0.0.1');
+
+        // Exhaust limiter A
+        const a1 = await limiterA(req);
+        expect(a1.limited).toBe(false);
+        const a2 = await limiterA(req);
+        expect(a2.limited).toBe(true);
+
+        // Limiter B should still have its own counter
+        const b1 = await limiterB(req);
+        expect(b1.limited).toBe(false);
+    });
+
+    it('without prefix, limiters on same store share counters', async () => {
+        const store = new MemoryStore();
+        const limiterA = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            store
+        });
+        const limiterB = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            store
+        });
+
+        const req = createRequest('50.0.0.2');
+
+        const a1 = await limiterA(req);
+        expect(a1.limited).toBe(false);
+
+        // Same key, same store — B is already exhausted
+        const b1 = await limiterB(req);
+        expect(b1.limited).toBe(true);
+    });
+
+    it('works with async keyGenerator', async () => {
+        const store = new MemoryStore();
+        const limiter = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            prefix: 'async-test',
+            keyGenerator: async (req: Request) => req.headers.get('x-api-key') ?? 'unknown',
+            store
+        });
+
+        const req = new Request('http://localhost/', { headers: { 'x-api-key': 'key-1' } });
+        const r1 = await limiter(req);
+        expect(r1.limited).toBe(false);
+        const r2 = await limiter(req);
+        expect(r2.limited).toBe(true);
+    });
+
+    describe('key construction', () => {
+        function captureKeys(storePrefix?: string): { store: MemoryStore; keys: string[]; spy: ReturnType<typeof vi.spyOn> } {
+            const keys: string[] = [];
+            const store = new MemoryStore(storePrefix ? { prefix: storePrefix } : undefined);
+            const spy = vi.spyOn(store, 'consume').mockImplementation((key, algorithm, limit, cost) => {
+                keys.push((store.prefix ?? '') + key);
+                return MemoryStore.prototype.consume.call(store, key, algorithm, limit, cost);
+            });
+            return { store, keys, spy };
+        }
+
+        afterEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('no prefixes — key is just the IP', async () => {
+            const { store, keys } = captureKeys();
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'fixed-window', windowMs: 60_000 }, store });
+
+            await limiter(createRequest('99.0.0.1'));
+            expect(keys).toEqual(['99.0.0.1']);
+        });
+
+        it('limiter prefix only — key is prefix:IP', async () => {
+            const { store, keys } = captureKeys();
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'fixed-window', windowMs: 60_000 }, prefix: 'auth', store });
+
+            await limiter(createRequest('99.0.0.1'));
+            expect(keys).toEqual(['auth:99.0.0.1']);
+        });
+
+        it('store prefix only — key is storePrefix + IP', async () => {
+            const { store, keys } = captureKeys('rl:');
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'fixed-window', windowMs: 60_000 }, store });
+
+            await limiter(createRequest('99.0.0.1'));
+            expect(keys).toEqual(['rl:99.0.0.1']);
+        });
+
+        it('both prefixes — key is storePrefix + limiterPrefix:IP', async () => {
+            const { store, keys } = captureKeys('rl:');
+            const limiter = rateLimit({ limit: 10, algorithm: { type: 'fixed-window', windowMs: 60_000 }, prefix: 'auth', store });
+
+            await limiter(createRequest('99.0.0.1'));
+            expect(keys).toEqual(['rl:auth:99.0.0.1']);
+        });
+    });
+
+    it('store prefix and limiter prefix create distinct namespaces', async () => {
+        const storeA = new MemoryStore({ prefix: 'tenant-a:' });
+        const storeB = new MemoryStore({ prefix: 'tenant-b:' });
+
+        const limiterA = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            prefix: 'api',
+            store: storeA
+        });
+        const limiterB = rateLimit({
+            limit: 1,
+            algorithm: { type: 'fixed-window', windowMs: 60_000 },
+            prefix: 'api',
+            store: storeB
+        });
+
+        const req = createRequest('50.0.0.3');
+
+        // Exhaust limiter A
+        const a1 = await limiterA(req);
+        expect(a1.limited).toBe(false);
+        const a2 = await limiterA(req);
+        expect(a2.limited).toBe(true);
+
+        // Limiter B has the same limiter prefix but different store prefix — independent
+        const b1 = await limiterB(req);
+        expect(b1.limited).toBe(false);
     });
 });

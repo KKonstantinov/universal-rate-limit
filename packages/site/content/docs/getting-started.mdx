@@ -92,6 +92,7 @@ All options are optional with sensible defaults:
 | `message`       | `string \| object \| function` | `'Too Many Requests'` | Response body when limited                                  |
 | `statusCode`    | `number`                       | `429`                 | HTTP status code when limited                               |
 | `failOpen`      | `boolean`                      | `false`               | Fail open if the store errors                               |
+| `prefix`        | `string`                       | `undefined`           | Namespace prefix for [multiple limiters](/docs/api#multiple-limiters) |
 
 ## Algorithms
 
@@ -173,6 +174,16 @@ const limiter = rateLimit({
         // Rate limit by API key
         return request.headers.get('x-api-key') ?? '127.0.0.1';
     }
+});
+```
+
+Use `extractClientIp` to compose the library's IP logic into a custom key:
+
+```ts
+import { rateLimit, extractClientIp } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    keyGenerator: (req) => `${getUserId(req)}:${extractClientIp(req)}`
 });
 ```
 

@@ -22,6 +22,7 @@
         "version-packages": "changeset version && node scripts/sync-jsr-versions.js",
         "release": "pnpm build && changeset publish",
         "release:jsr": "pnpm -r --if-present run release:jsr",
+        "docs:sync": "pnpm --filter @universal-rate-limit/site sync",
         "dev": "pnpm --filter @universal-rate-limit/site dev",
         "site:build": "pnpm --filter @universal-rate-limit/site build",
         "prepare": "lefthook install"
