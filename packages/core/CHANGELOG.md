@@ -1,5 +1,12 @@
 # universal-rate-limit
 
+## 2.2.0
+
+### Minor Changes
+
+- [#15](https://github.com/KKonstantinov/universal-rate-limit/pull/15) [`0552765`](https://github.com/KKonstantinov/universal-rate-limit/commit/0552765d1b043648f62f4860c378f41424646571) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - add prefix on RateLimitOptions,
+  export extractClientIp
+
 ## 2.1.1
 
 ### Patch Changes
