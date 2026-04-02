@@ -164,10 +164,10 @@ This is a monorepo managed with [pnpm workspaces](https://pnpm.io/workspaces):
 
 **[View the full documentation](https://universal-rate-limit.vercel.app/docs)** | **[Playground](https://universal-rate-limit.vercel.app/playground)**
 
-- [Getting Started](docs/getting-started.md) — installation, first limiter, common patterns
-- [Middleware](docs/middleware.md) — Express, Fastify, Hono, and Next.js adapters
-- [Stores](docs/stores.md) — Store interface and custom implementations
-- [API Reference](docs/api.md) — complete API documentation with all types
+- [Getting Started](packages/site/content/docs/getting-started.mdx) — installation, first limiter, common patterns
+- [Middleware](packages/site/content/docs/middleware.mdx) — Express, Fastify, Hono, and Next.js adapters
+- [Stores](packages/site/content/docs/stores.mdx) — Store interface and custom implementations
+- [API Reference](packages/site/content/docs/api.mdx) — complete API documentation with all types
 - [Contributing](CONTRIBUTING.md) — development setup, testing, and contributing guidelines
 
 ## Runtime Compatibility
