@@ -51,8 +51,6 @@ tests/
 packages/site/                # Fumadocs documentation (Next.js)
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and internal details.
-
 ## Scripts
 
 All scripts can be run from the root of the monorepo:
