@@ -16,20 +16,20 @@ const result: RateLimitResult = await limiter(request);
 
 **Parameters:**
 
-| Option          | Type                                                                                      | Default                | Description                                                       |
-| --------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------- |
-| `limit`         | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window (or bucket capacity for token-bucket) |
-| `algorithm`     | `AlgorithmConfig \| Algorithm`                                                            | sliding-window (60s)   | Rate limiting algorithm                                           |
-| `cost`          | `number \| (req: Request) => number \| Promise<number>`                                   | `1`                    | Units to consume per request                                      |
-| `headers`       | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version                                              |
-| `legacyHeaders` | `boolean`                                                                                 | `false`                | Include X-RateLimit-\* headers                                    |
-| `store`         | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend                                                   |
-| `keyGenerator`  | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier                                         |
-| `skip`          | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting                                                |
-| `handler`       | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler                                           |
-| `message`       | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body                                                     |
-| `statusCode`    | `number`                                                                                  | `429`                  | HTTP status code                                                  |
-| `failOpen`      | `boolean`                                                                                 | `false`                | Fail open on store errors                                         |
+| Option          | Type                                                                                      | Default                | Description                                                        |
+| --------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------ |
+| `limit`         | `number \| (req: Request) => number \| Promise<number>`                                   | `60`                   | Maximum requests per window (or bucket capacity for token-bucket)  |
+| `algorithm`     | `AlgorithmConfig \| Algorithm`                                                            | sliding-window (60s)   | Rate limiting algorithm                                            |
+| `cost`          | `number \| (req: Request) => number \| Promise<number>`                                   | `1`                    | Units to consume per request                                       |
+| `headers`       | `'draft-7' \| 'draft-6'`                                                                  | `'draft-7'`            | IETF headers version                                               |
+| `legacyHeaders` | `boolean`                                                                                 | `false`                | Include X-RateLimit-\* headers                                     |
+| `store`         | `Store`                                                                                   | `new MemoryStore(...)` | Storage backend                                                    |
+| `keyGenerator`  | `(req: Request) => string \| Promise<string>`                                             | IP-based               | Extract client identifier                                          |
+| `skip`          | `(req: Request) => boolean \| Promise<boolean>`                                           | `undefined`            | Skip rate limiting                                                 |
+| `handler`       | `(req: Request, result: RateLimitResult) => Response \| Promise<Response>`                | `undefined`            | Custom response handler                                            |
+| `message`       | `string \| Record<string, unknown> \| (req, result) => string \| Record<string, unknown>` | `'Too Many Requests'`  | Response body                                                      |
+| `statusCode`    | `number`                                                                                  | `429`                  | HTTP status code                                                   |
+| `failOpen`      | `boolean`                                                                                 | `false`                | Fail open on store errors                                          |
 | `prefix`        | `string`                                                                                  | `undefined`            | Key namespace prefix (see [Multiple limiters](#multiple-limiters)) |
 
 **Returns:** `(request: Request) => Promise<RateLimitResult>`
@@ -90,14 +90,15 @@ const response = await buildRateLimitResponse(request, result, {
 
 ## `extractClientIp(request)`
 
-Extract the client IP from a Web Standard `Request` by checking well-known proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`) in order. Returns the first IP found, or `'127.0.0.1'` when no header is present.
+Extract the client IP from a Web Standard `Request` by checking well-known proxy headers (`x-forwarded-for`, `x-real-ip`,
+`cf-connecting-ip`, `fly-client-ip`) in order. Returns the first IP found, or `'127.0.0.1'` when no header is present.
 
 ```ts
 import { extractClientIp } from 'universal-rate-limit';
 
 // Use as part of a custom keyGenerator:
 const limiter = rateLimit({
-    keyGenerator: (req) => `${getUserId(req)}:${extractClientIp(req)}`
+    keyGenerator: req => `${getUserId(req)}:${extractClientIp(req)}`
 });
 ```
 
@@ -120,7 +121,8 @@ Also available from all middleware packages.
 
 ## Multiple Limiters
 
-When multiple limiters share a store, use the `prefix` option to namespace their counters. Without it, limiters sharing the same store will collide on the same key for the same client.
+When multiple limiters share a store, use the `prefix` option to namespace their counters. Without it, limiters sharing the same store will
+collide on the same key for the same client.
 
 ```ts
 import { rateLimit } from 'universal-rate-limit';
@@ -136,11 +138,11 @@ const apiLimiter = rateLimit({ prefix: 'api', limit: 120, store });
 
 The final storage key is built in two steps:
 
-1. **Limiter prefix** — `rateLimit()` prepends `prefix` + `:` to the result of `keyGenerator(request)`:
-   `auth` + `:` + `203.0.113.1` → `auth:203.0.113.1`
+1. **Limiter prefix** — `rateLimit()` prepends `prefix` + `:` to the result of `keyGenerator(request)`: `auth` + `:` + `203.0.113.1` →
+   `auth:203.0.113.1`
 
-2. **Store prefix** — the store (e.g. `RedisStore`) prepends its own `prefix` to the key it receives:
-   `rl:` + `auth:203.0.113.1` → `rl:auth:203.0.113.1`
+2. **Store prefix** — the store (e.g. `RedisStore`) prepends its own `prefix` to the key it receives: `rl:` + `auth:203.0.113.1` →
+   `rl:auth:203.0.113.1`
 
 ```
 ┌──────────────┬───────────────┬─────────────────┐
@@ -150,7 +152,8 @@ The final storage key is built in two steps:
  → final key: rl:auth:203.0.113.1
 ```
 
-Either prefix is optional. If only `store.prefix` is set, the key is `rl:203.0.113.1`. If only `options.prefix` is set, the key is `auth:203.0.113.1`. If neither is set, the key is just the IP.
+Either prefix is optional. If only `store.prefix` is set, the key is `rl:203.0.113.1`. If only `options.prefix` is set, the key is
+`auth:203.0.113.1`. If neither is set, the key is just the IP.
 
 ---
 
@@ -300,4 +303,5 @@ import { withRateLimit, nextjsRateLimit } from '@universal-rate-limit/nextjs';
 - `withRateLimit(handler, options?)` — Wraps a Next.js App Router handler with rate limiting.
 - `nextjsRateLimit(options?)` — Creates a limiter for Edge Middleware use.
 
-All middleware packages also re-export: `RateLimitOptions`, `RateLimitResult`, `Store`, `ConsumeResult`, `MemoryStore`, `IP_HEADERS`, `extractClientIp`.
+All middleware packages also re-export: `RateLimitOptions`, `RateLimitResult`, `Store`, `ConsumeResult`, `MemoryStore`, `IP_HEADERS`,
+`extractClientIp`.
