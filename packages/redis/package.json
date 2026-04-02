@@ -1,6 +1,6 @@
 {
     "name": "@universal-rate-limit/redis",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "description": "Redis store for universal-rate-limit",
     "type": "module",
     "sideEffects": false,
