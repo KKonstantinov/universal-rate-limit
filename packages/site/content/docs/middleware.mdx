@@ -17,7 +17,9 @@ flowchart LR
     F -->|Yes| H["429 response"]
 ```
 
-## Express
+## Frameworks
+
+### Express
 
 ```bash
 npm install @universal-rate-limit/express
@@ -49,7 +51,7 @@ app.use(
 
 The Express adapter converts `express.Request` to a Web Standard `Request` internally, extracting headers and URL information.
 
-## Fastify
+### Fastify
 
 ```bash
 npm install @universal-rate-limit/fastify
@@ -70,7 +72,7 @@ await fastify.register(fastifyRateLimit, {
 
 The Fastify adapter registers an `onRequest` hook that runs before route handlers.
 
-## Hono
+### Hono
 
 ```bash
 npm install @universal-rate-limit/hono
@@ -102,13 +104,13 @@ app.use(
 
 The Hono adapter uses `c.req.raw` to access the native Web Standard `Request` directly — no conversion needed.
 
-## Next.js
+### Next.js
 
 ```bash
 npm install @universal-rate-limit/nextjs
 ```
 
-### App Router API Routes
+#### App Router API Routes
 
 Wrap route handlers with `withRateLimit`:
 
@@ -126,7 +128,7 @@ export const GET = withRateLimit(handler, {
 });
 ```
 
-### Edge Middleware
+#### Edge Middleware
 
 Use `nextjsRateLimit` for Edge Middleware:
 

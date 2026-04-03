@@ -78,7 +78,139 @@ rateLimit({
 });
 ```
 
-## Store Interface
+## Algorithms
+
+### Sliding Window
+
+The default. Weights the previous window's hits for smoother rate limiting:
+
+```ts
+import { rateLimit, slidingWindow } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    algorithm: slidingWindow({ windowMs: 60_000 }),
+    limit: 100
+});
+```
+
+### Fixed Window
+
+Simple counter that resets at each window boundary:
+
+```ts
+import { rateLimit, fixedWindow } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    algorithm: fixedWindow({ windowMs: 60_000 }),
+    limit: 100
+});
+```
+
+### Token Bucket
+
+Steady-rate traffic with burst capacity:
+
+```ts
+import { rateLimit, tokenBucket } from 'universal-rate-limit';
+
+const limiter = rateLimit({
+    limit: 100,
+    algorithm: tokenBucket({ refillRate: 10 })
+});
+```
+
+## Customization
+
+### Custom Key Generator
+
+By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`). Override this for custom logic:
+
+```ts
+const limiter = rateLimit({
+    keyGenerator: request => {
+        return request.headers.get('x-api-key') ?? '127.0.0.1';
+    }
+});
+```
+
+### Dynamic Limits
+
+The `limit` option accepts a function for per-request limits:
+
+```ts
+const limiter = rateLimit({
+    limit: async request => {
+        const apiKey = request.headers.get('x-api-key');
+        if (apiKey === 'premium') return 1000;
+        return 60;
+    }
+});
+```
+
+### Skip Requests
+
+Bypass rate limiting for certain requests:
+
+```ts
+const limiter = rateLimit({
+    skip: request => {
+        return new URL(request.url).pathname === '/health';
+    }
+});
+```
+
+### Custom Response
+
+Customize the 429 response body:
+
+```ts
+const limiter = rateLimit({
+    message: { error: 'Rate limit exceeded' },
+    statusCode: 429
+});
+```
+
+## Response Headers
+
+All responses include IETF rate limit headers. Draft-7 (default):
+
+```
+RateLimit: limit=60, remaining=59, reset=58
+RateLimit-Policy: 60;w=60
+```
+
+Draft-6:
+
+```
+RateLimit-Limit: 60
+RateLimit-Remaining: 59
+RateLimit-Reset: 58
+```
+
+When rate limited, a [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) header is included automatically. Switch versions with `headers: 'draft-6'`.
+
+## Stores
+
+### MemoryStore
+
+The built-in `MemoryStore` is used by default. It supports all three algorithms:
+
+- **Fixed window** — counts hits in aligned time slots, resets at each window boundary
+- **Sliding window** — tracks both current and previous window counts, weights the previous window by elapsed time
+- **Token bucket** — tracks available tokens and refill timestamps, refills at a steady rate
+
+The store runs a background cleanup timer (default: every 60s) to evict expired entries. The timer uses `.unref()` so it won't keep the process alive. Call `store.shutdown()` to clear the timer when done.
+
+### Redis Store
+
+The [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis) package provides a production-ready Redis store:
+
+- **Atomic operations** — Lua scripts via `EVALSHA` ensure hit count and TTL are always consistent
+- **NOSCRIPT recovery** — automatically reloads scripts if the Redis script cache is flushed
+- **Non-blocking `resetAll()`** — uses `SCAN` + `DEL` instead of `KEYS` to avoid blocking Redis
+- **Zero Redis client dependencies** — works with ioredis, node-redis, or any client that can send raw commands
+
+### Custom Store
 
 Implement the `Store` interface to use any backend:
 
@@ -100,7 +232,16 @@ class MyStore implements Store {
 const limiter = rateLimit({ store: new MyStore() });
 ```
 
-A ready-made Redis store is available via [`@universal-rate-limit/redis`](https://www.npmjs.com/package/@universal-rate-limit/redis).
+### Fail Open
+
+If the store throws an error, the rate limiter re-throws by default. Set `failOpen: true` to allow requests through when the store is unavailable:
+
+```ts
+const limiter = rateLimit({
+    store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+    failOpen: true
+});
+```
 
 ## Examples
 

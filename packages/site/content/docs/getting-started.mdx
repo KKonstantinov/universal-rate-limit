@@ -5,6 +5,15 @@ description: Install universal-rate-limit and start rate limiting requests in mi
 
 Want to try it first? **[Open the playground](/playground)** to experiment with rate limiting right in your browser.
 
+## Why universal-rate-limit?
+
+Most rate limiters are tied to a single framework or runtime. `universal-rate-limit` is built on the Web Standards `Request`/`Response` API, so the same core works on Node.js, Bun, Deno, Cloudflare Workers, and Vercel Edge — no rewrites, no adapters to learn from scratch.
+
+- **One library, every runtime** — write your rate limiting logic once, deploy it anywhere
+- **Drop-in framework middleware** — first-class adapters for Express, Fastify, Hono, and Next.js
+- **IETF-compliant headers** — draft-6 and draft-7 rate limit headers plus [`Retry-After`](https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3) out of the box
+- **~3 KB min+gzip** — zero dependencies, tree-shakeable ESM
+
 ## Installation
 
 Install the core package:
@@ -163,7 +172,9 @@ const limiter = rateLimit({
 });
 ```
 
-## Custom Key Generator
+## Customization
+
+### Custom Key Generator
 
 By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`).
 Override this for custom logic:
@@ -187,7 +198,7 @@ const limiter = rateLimit({
 });
 ```
 
-## Dynamic Limits
+### Dynamic Limits
 
 The `limit` option accepts a function for per-request limits:
 
@@ -201,7 +212,7 @@ const limiter = rateLimit({
 });
 ```
 
-## Skip Requests
+### Skip Requests
 
 Bypass rate limiting for certain requests:
 
@@ -213,7 +224,7 @@ const limiter = rateLimit({
 });
 ```
 
-## Custom Response
+### Custom Response
 
 Customize the 429 response body. A `Retry-After` header is included automatically on all 429 responses.
 
@@ -236,3 +247,22 @@ const limiter = rateLimit({
     }
 });
 ```
+
+## Runtime Compatibility
+
+| Runtime            | Version | Status     |
+| ------------------ | ------- | ---------- |
+| Node.js            | >= 20   | Tested     |
+| Bun                | >= 1.0  | Tested     |
+| Deno               | >= 2.0  | Tested     |
+| Cloudflare Workers | -       | Compatible |
+| Vercel Edge        | -       | Compatible |
+
+## Examples
+
+Complete working apps with integration tests are available for each framework:
+
+- [Express](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/express)
+- [Fastify](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/fastify)
+- [Hono](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/hono)
+- [Next.js](https://github.com/kkonstantinov/universal-rate-limit/tree/main/examples/nextjs)

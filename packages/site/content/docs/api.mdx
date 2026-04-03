@@ -3,7 +3,9 @@ title: API Reference
 description: Complete API reference for universal-rate-limit core, stores, and middleware packages.
 ---
 
-## `rateLimit(options?)`
+## Core
+
+### `rateLimit(options?)`
 
 Creates a rate limiter function.
 
@@ -36,7 +38,7 @@ const result: RateLimitResult = await limiter(request);
 
 ---
 
-## `RateLimitResult`
+### `RateLimitResult`
 
 The result object returned by the limiter function.
 
@@ -60,7 +62,7 @@ interface RateLimitResult {
 
 ---
 
-## `buildRateLimitResponse(request, result, options)`
+### `buildRateLimitResponse(request, result, options)`
 
 Helper used by middleware adapters to build a 429 response.
 
@@ -88,7 +90,7 @@ const response = await buildRateLimitResponse(request, result, {
 
 ---
 
-## `extractClientIp(request)`
+### `extractClientIp(request)`
 
 Extract the client IP from a Web Standard `Request` by checking well-known proxy headers (`x-forwarded-for`, `x-real-ip`,
 `cf-connecting-ip`, `fly-client-ip`) in order. Returns the first IP found, or `'127.0.0.1'` when no header is present.
@@ -106,7 +108,7 @@ Also available from all middleware packages (e.g. `@universal-rate-limit/nextjs`
 
 ---
 
-## `IP_HEADERS`
+### `IP_HEADERS`
 
 The ordered list of proxy/CDN headers checked by `extractClientIp`:
 
@@ -119,7 +121,7 @@ Also available from all middleware packages.
 
 ---
 
-## Multiple Limiters
+### Multiple Limiters
 
 When multiple limiters share a store, use the `prefix` option to namespace their counters. Without it, limiters sharing the same store will
 collide on the same key for the same client.
@@ -134,7 +136,7 @@ const authLimiter = rateLimit({ prefix: 'auth', limit: 30, store });
 const apiLimiter = rateLimit({ prefix: 'api', limit: 120, store });
 ```
 
-### How the key is constructed
+#### How the key is constructed
 
 The final storage key is built in two steps:
 
@@ -157,7 +159,9 @@ Either prefix is optional. If only `store.prefix` is set, the key is `rl:203.0.1
 
 ---
 
-## `MemoryStore`
+## Stores
+
+### `MemoryStore`
 
 In-memory store implementation backed by a single `Map`, supporting all built-in algorithms.
 
@@ -187,7 +191,7 @@ const store = new MemoryStore({ prefix: 'my-app:', cleanupIntervalMs: 30_000 });
 
 ---
 
-## `RedisStore`
+### `RedisStore`
 
 Redis-backed store from `@universal-rate-limit/redis`. Uses Lua scripts for atomic operations.
 
@@ -218,7 +222,7 @@ const store = new RedisStore({
 
 ---
 
-## `Store` Interface
+### `Store` Interface
 
 Implement this interface for custom storage backends.
 
@@ -243,7 +247,7 @@ interface ConsumeResult {
 
 ---
 
-## Types
+### Types
 
 ```ts
 type AlgorithmConfig =
@@ -256,9 +260,7 @@ type HeadersVersion = 'draft-6' | 'draft-7';
 
 ---
 
-## Store Exports
-
-### `@universal-rate-limit/redis`
+### Store Exports (`@universal-rate-limit/redis`)
 
 ```ts
 import { RedisStore } from '@universal-rate-limit/redis';
@@ -268,7 +270,7 @@ import { RedisStore } from '@universal-rate-limit/redis';
 
 ---
 
-## Middleware Exports
+## Middleware
 
 ### `@universal-rate-limit/express`
 
