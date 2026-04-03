@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+:root {
+    --color-fd-primary: hsl(195, 55%, 30%);
+    --color-fd-primary-foreground: hsl(0, 0%, 98%);
+}
+
+.dark {
+    --color-fd-primary: hsl(195, 50%, 55%);
+    --color-fd-primary-foreground: hsl(195, 30%, 8%);
+}
+
 @theme {
     --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, 'Menlo', 'Consolas', 'Liberation Mono', monospace;
     --color-green-glow: oklch(0.75 0.18 145);

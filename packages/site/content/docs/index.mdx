@@ -24,9 +24,13 @@ description: Web-standards-based rate limiting with pluggable stores and framewo
 
 ## Quick Start
 
+### Installation
+
 ```bash
 npm install universal-rate-limit
 ```
+
+### Usage
 
 ```ts
 import { rateLimit } from 'universal-rate-limit';
@@ -50,12 +54,16 @@ if (result.limited) {
 
 Rate limit any framework with a single line:
 
+### Express
+
 ```ts
-// Express
 import { expressRateLimit } from '@universal-rate-limit/express';
 app.use(expressRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
+```
 
-// Hono
+### Hono
+
+```ts
 import { honoRateLimit } from '@universal-rate-limit/hono';
 app.use(honoRateLimit({ algorithm: { type: 'sliding-window', windowMs: 60_000 }, limit: 60 }));
 ```
