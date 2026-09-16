@@ -1,5 +1,12 @@
 # @universal-rate-limit/hono
 
+## 2.2.0
+
+### Minor Changes
+
+- [#17](https://github.com/KKonstantinov/universal-rate-limit/pull/17) [`00ec8a3`](https://github.com/KKonstantinov/universal-rate-limit/commit/00ec8a376dbd2e7350582304b62bb774268f2b93) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - Pass typed Hono context as the
+  final argument to rate-limit callbacks while preserving existing Request-based callbacks. Preserve custom refusal headers and binary or streaming bodies, and apply rate-limit headers to final downstream and error responses.
+
 ## 2.1.0
 
 ### Minor Changes
