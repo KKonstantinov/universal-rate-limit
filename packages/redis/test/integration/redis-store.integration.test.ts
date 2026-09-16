@@ -154,6 +154,60 @@ describe('RedisStore integration', () => {
     describe('token-bucket algorithm', () => {
         const algo = tokenBucket({ refillRate: 10 });
 
+        it.each([
+            { limit: 0, cost: 1, retryAfterMs: 100 },
+            { limit: 5, cost: 6, retryAfterMs: 100 },
+            { limit: 5, cost: 10, retryAfterMs: 500 }
+        ])('rejects a new bucket request exceeding capacity (limit=$limit, cost=$cost)', async ({ limit, cost, retryAfterMs }) => {
+            const store = createStore();
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const result = await store.consume('oversized', algo, limit, cost);
+                expect(result.limited).toBe(true);
+                expect(result.remaining).toBe(0);
+                expect(result.retryAfterMs).toBe(retryAfterMs);
+            }
+            if (limit > 0) {
+                const admitted = await store.consume('oversized', algo, limit, limit);
+                expect(admitted.limited).toBe(false);
+                expect(admitted.remaining).toBe(0);
+            }
+        });
+
+        it('admits a new bucket request whose cost exactly equals capacity', async () => {
+            const result = await createStore().consume('exact', algo, 5, 5);
+            expect(result.limited).toBe(false);
+            expect(result.remaining).toBe(0);
+            expect(result.retryAfterMs).toBe(0);
+        });
+
+        it('rejects oversized requests across store instances without spending shared capacity', async () => {
+            const first = createStore();
+            const second = new RedisStore({ sendCommand: ctx.sendCommand, prefix: first.prefix });
+            const slowRefill = tokenBucket({ refillRate: 1, refillMs: 60_000 });
+            const results = await Promise.all(
+                Array.from({ length: 20 }, (_, i) => (i % 2 === 0 ? first : second).consume('shared', slowRefill, 5, 6))
+            );
+            expect(results.every(result => result.limited)).toBe(true);
+            const admitted = await second.consume('shared', slowRefill, 5, 5);
+            expect(admitted.limited).toBe(false);
+            expect(admitted.remaining).toBe(0);
+        });
+
+        it('enforces a zero token-bucket limit through the public limiter', async () => {
+            const limiter = rateLimit({
+                limit: 0,
+                algorithm: { type: 'token-bucket', refillRate: 10 },
+                store: createStore()
+            });
+            const request = new Request('https://example.com/');
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const result = await limiter(request);
+                expect(result.limited).toBe(true);
+                expect(result.remaining).toBe(0);
+                expect(result.headers['Retry-After']).toBe('1');
+            }
+        });
+
         it('consume first call returns remaining = limit - 1', async () => {
             const store = createStore();
             const result = await store.consume('key', algo, 10);

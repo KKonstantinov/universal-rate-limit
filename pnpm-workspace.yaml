@@ -9,4 +9,6 @@ packages:
 overrides:
     esbuild: '>=0.25.0'
 
-onlyBuiltDependencies: '["lefthook", "esbuild"]'
+onlyBuiltDependencies:
+    - lefthook
+    - esbuild
