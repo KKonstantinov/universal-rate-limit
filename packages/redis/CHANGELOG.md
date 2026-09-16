@@ -1,5 +1,12 @@
 # @universal-rate-limit/redis
 
+## 2.1.3
+
+### Patch Changes
+
+- [#17](https://github.com/KKonstantinov/universal-rate-limit/pull/17) [`00ec8a3`](https://github.com/KKonstantinov/universal-rate-limit/commit/00ec8a376dbd2e7350582304b62bb774268f2b93) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - Reject token-bucket requests
+  whose cost exceeds a new bucket's capacity, including zero-capacity buckets. Rejected requests preserve available tokens across repeated and concurrent calls.
+
 ## 2.1.2
 
 ### Patch Changes
