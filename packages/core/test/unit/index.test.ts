@@ -1307,6 +1307,34 @@ describe('hardened interfaces', () => {
         });
 
         describe('token bucket with cost', () => {
+            it.each([
+                { limit: 0, cost: 1, retryAfterMs: 100 },
+                { limit: 5, cost: 6, retryAfterMs: 100 },
+                { limit: 5, cost: 10, retryAfterMs: 500 }
+            ])('preserves capacity after repeated oversized requests (limit=$limit, cost=$cost)', ({ limit, cost, retryAfterMs }) => {
+                const algo = tokenBucket({ refillRate: 10 });
+                const first = algo.consume(undefined, limit, 5000, cost);
+                const second = algo.consume(first.next, limit, 5000, cost);
+
+                for (const { result } of [first, second]) {
+                    expect(result.limited).toBe(true);
+                    expect(result.remaining).toBe(0);
+                    expect(result.retryAfterMs).toBe(retryAfterMs);
+                }
+                if (limit > 0) {
+                    const admitted = algo.consume(second.next, limit, 5000, limit).result;
+                    expect(admitted.limited).toBe(false);
+                    expect(admitted.remaining).toBe(0);
+                }
+            });
+
+            it('admits a first request whose cost exactly equals capacity', () => {
+                const result = tokenBucket({ refillRate: 10 }).consume(undefined, 5, 5000, 5).result;
+                expect(result.limited).toBe(false);
+                expect(result.remaining).toBe(0);
+                expect(result.retryAfterMs).toBe(0);
+            });
+
             it('cost=2 deducts 2 tokens at algorithm level', () => {
                 const algo = tokenBucket({ refillRate: 10 });
 

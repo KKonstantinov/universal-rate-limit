@@ -244,21 +244,21 @@ local tokens
 local limited
 
 if tokensStr == false then
-    -- First request: bucket starts full, deduct cost
-    tokens = capacity - cost
-    limited = 0
+    -- A new bucket has its full capacity, but the request must still fit.
+    tokens = capacity
 else
     local lastRefillMs = tonumber(lastRefillStr)
     local elapsed = nowMs - lastRefillMs
     local refilled = elapsed * tokensPerMs
     tokens = math.min(capacity, tonumber(tokensStr) + refilled)
+end
 
-    if tokens >= cost then
-        tokens = tokens - cost
-        limited = 0
-    else
-        limited = 1
-    end
+if tokens >= cost then
+    tokens = tokens - cost
+    limited = 0
+else
+    -- Rejected requests leave available capacity intact.
+    limited = 1
 end
 
 redis.call("HMSET", key, "tokens", tostring(tokens), "lastRefillMs", tostring(nowMs))
