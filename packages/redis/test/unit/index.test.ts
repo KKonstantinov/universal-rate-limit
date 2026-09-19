@@ -19,6 +19,7 @@ interface MockEntry {
     value: string;
     fields?: Map<string, string>;
     expiresAt: number;
+    expiryClock?: 'authority';
 }
 
 function sha1(script: string): string {
@@ -34,14 +35,21 @@ function createMockRedis(): {
     sendCommand: SendCommandFn;
     store: Map<string, MockEntry>;
     scripts: Map<string, string>;
+    setAuthorityNowMs(nowMs: number | undefined): void;
 } {
     const store = new Map<string, MockEntry>();
     const scripts = new Map<string, string>();
+    let authorityNowMs: number | undefined;
+
+    function getAuthorityNowMs(): number {
+        return authorityNowMs ?? Date.now();
+    }
 
     function getEntry(key: string): MockEntry | undefined {
         const entry = store.get(key);
         if (!entry) return undefined;
-        if (entry.expiresAt > 0 && Date.now() >= entry.expiresAt) {
+        const nowMs = entry.expiryClock === 'authority' ? getAuthorityNowMs() : Date.now();
+        if (entry.expiresAt > 0 && nowMs >= entry.expiresAt) {
             store.delete(key);
             return undefined;
         }
@@ -342,59 +350,47 @@ function createMockRedis(): {
     function executeTokenBucketConsume(key: string, argv: string[]): RedisReply {
         const refillRate = Number(argv[0]);
         const capacity = Number(argv[1]);
-        const nowMs = Number(argv[2]);
-        const cost = Number(argv[3]) || 1;
-        const refillMs = Number(argv[4]) || 1000;
+        const usesAuthorityTime = argv.length === 4;
+        const nowMs = usesAuthorityTime ? getAuthorityNowMs() : Number(argv[2]);
+        const cost = Number(argv[usesAuthorityTime ? 2 : 3]) || 1;
+        const refillMs = Number(argv[usesAuthorityTime ? 3 : 4]) || 1000;
 
         const entry = getEntry(key);
         let tokens: number;
         let lastRefillTime: number;
 
         if (!entry || !entry.fields) {
-            // First request: start with full bucket, deduct cost
-            tokens = capacity - cost;
+            tokens = capacity;
             lastRefillTime = nowMs;
         } else {
             tokens = Number(entry.fields.get('tokens') ?? String(capacity));
             lastRefillTime = Number(entry.fields.get('lastRefillMs') ?? String(nowMs));
 
-            // Refill using refillMs instead of hardcoded 1000
-            const elapsed = nowMs - lastRefillTime;
+            const effectiveNowMs = usesAuthorityTime ? Math.max(nowMs, lastRefillTime) : nowMs;
+            const elapsed = effectiveNowMs - lastRefillTime;
             const refilled = (elapsed / refillMs) * refillRate;
-            tokens = Math.min(capacity, tokens + refilled);
-            lastRefillTime = nowMs;
-
-            // Consume
-            if (tokens >= cost) {
-                tokens -= cost;
-            } else {
-                // Not enough tokens — limited, remaining=0
-                const retryAfterMs = Math.ceil(((cost - tokens) / refillRate) * refillMs);
-                const resetTime = nowMs + Math.ceil(((capacity - tokens) / refillRate) * refillMs);
-
-                const fields = new Map<string, string>([
-                    ['tokens', String(tokens)],
-                    ['lastRefillMs', String(lastRefillTime)]
-                ]);
-                const ttlMs = Math.ceil((capacity / refillRate) * refillMs);
-                store.set(key, { value: '', fields, expiresAt: nowMs + ttlMs });
-
-                return [1, 0, resetTime, retryAfterMs];
-            }
+            tokens = Math.max(0, Math.min(capacity, tokens + refilled));
+            lastRefillTime = effectiveNowMs;
         }
 
-        const remaining = Math.max(0, Math.floor(tokens));
-        const resetTime = nowMs + Math.ceil(((capacity - tokens) / refillRate) * refillMs);
+        const limited = tokens < cost;
+        if (!limited) {
+            tokens -= cost;
+        }
 
-        // Store state
         const fields = new Map<string, string>([
             ['tokens', String(tokens)],
             ['lastRefillMs', String(lastRefillTime)]
         ]);
-        const ttlMs = Math.ceil((capacity / refillRate) * refillMs);
-        store.set(key, { value: '', fields, expiresAt: nowMs + ttlMs });
+        const rollbackMs = usesAuthorityTime ? Math.max(0, lastRefillTime - nowMs) : 0;
+        const ttlMs = rollbackMs + Math.ceil((capacity / refillRate) * refillMs);
+        store.set(key, { value: '', fields, expiresAt: nowMs + ttlMs, expiryClock: usesAuthorityTime ? 'authority' : undefined });
 
-        return [0, remaining, resetTime, 0];
+        const resetAfterMs = rollbackMs + Math.ceil(((capacity - tokens) / refillRate) * refillMs);
+        const resetTime = usesAuthorityTime ? resetAfterMs : nowMs + resetAfterMs;
+        const retryAfterMs = limited ? rollbackMs + Math.ceil(((cost - tokens) / refillRate) * refillMs) : 0;
+
+        return [limited ? 1 : 0, limited ? 0 : Math.max(0, Math.floor(tokens)), resetTime, retryAfterMs];
     }
 
     function executeTokenBucketPeek(key: string, argv: string[]): RedisReply {
@@ -403,23 +399,34 @@ function createMockRedis(): {
 
         const refillRate = Number(argv[0]);
         const capacity = Number(argv[1]);
-        const nowMs = Number(argv[2]);
-        const refillMs = Number(argv[3]) || 1000;
+        const usesAuthorityTime = argv.length === 3;
+        const nowMs = usesAuthorityTime ? getAuthorityNowMs() : Number(argv[2]);
+        const refillMs = Number(argv[usesAuthorityTime ? 2 : 3]) || 1000;
 
         let tokens = Number(entry.fields.get('tokens') ?? String(capacity));
         const lastRefillTime = Number(entry.fields.get('lastRefillMs') ?? String(nowMs));
 
-        // Refill (read-only) using refillMs instead of hardcoded 1000
-        const elapsed = nowMs - lastRefillTime;
+        const effectiveNowMs = usesAuthorityTime ? Math.max(nowMs, lastRefillTime) : nowMs;
+        const elapsed = effectiveNowMs - lastRefillTime;
         const refilled = (elapsed / refillMs) * refillRate;
-        tokens = Math.min(capacity, tokens + refilled);
+        tokens = Math.max(0, Math.min(capacity, tokens + refilled));
 
+        const rollbackMs = usesAuthorityTime ? Math.max(0, lastRefillTime - nowMs) : 0;
         const remaining = Math.max(0, Math.floor(tokens));
-        const resetTime = nowMs + Math.ceil(((capacity - tokens) / refillRate) * refillMs);
-        return [0, remaining, resetTime, 0];
+        const resetAfterMs = rollbackMs + Math.ceil(((capacity - tokens) / refillRate) * refillMs);
+        const resetTime = usesAuthorityTime ? resetAfterMs : nowMs + resetAfterMs;
+        const retryAfterMs = tokens < 1 ? rollbackMs + Math.ceil(((1 - tokens) / refillRate) * refillMs) : 0;
+        return [tokens < 1 ? 1 : 0, remaining, resetTime, retryAfterMs];
     }
 
-    return { sendCommand, store, scripts };
+    return {
+        sendCommand,
+        store,
+        scripts,
+        setAuthorityNowMs(nowMs) {
+            authorityNowMs = nowMs;
+        }
+    };
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -516,6 +523,47 @@ describe('RedisStore', () => {
 
     describe('token-bucket algorithm', () => {
         const algo = tokenBucket({ refillRate: 10 });
+
+        it('uses Redis authority when application clocks move backward', async () => {
+            vi.useFakeTimers();
+            try {
+                mock.setAuthorityNowMs(1_800_000_000_000);
+                vi.setSystemTime(2_000_000_000_000);
+
+                const first = await redisStore.consume('test-key', algo, 30, 29);
+                expect(first.limited).toBe(false);
+                expect(first.remaining).toBe(1);
+
+                vi.setSystemTime(1_999_999_999_900);
+                const second = await redisStore.consume('test-key', algo, 30);
+
+                expect(second.limited).toBe(false);
+                expect(second.remaining).toBe(0);
+                expect(mock.store.get('rl:test-key')?.fields?.get('lastRefillMs')).toBe('1800000000000');
+                expect(mock.store.get('rl:test-key')?.fields?.get('tokens')).toBe('0');
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('anchors Redis-relative reset duration to the application clock', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(2_000_000_000_000);
+                const sendCommand: SendCommandFn = async (...args) => {
+                    if (args[0] === 'SCRIPT') return 'token-script';
+                    return [1, 0, 500, 100];
+                };
+                const store = new RedisStore({ sendCommand });
+
+                const result = await store.consume('test-key', algo, 10);
+
+                expect(result.resetTime.getTime()).toBe(2_000_000_000_500);
+                expect(result.retryAfterMs).toBe(100);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
 
         it('first consume returns remaining = limit - 1', async () => {
             const result = await redisStore.consume('test-key', algo, 10);

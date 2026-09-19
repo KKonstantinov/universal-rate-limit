@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { RedisStore } from '../../src/index.js';
 import { rateLimit, fixedWindow, slidingWindow, tokenBucket } from 'universal-rate-limit';
 import type { Algorithm } from 'universal-rate-limit';
@@ -22,6 +22,59 @@ describe('RedisStore integration', () => {
             sendCommand: ctx.sendCommand,
             prefix: uniquePrefix
         });
+    }
+
+    async function redisTimeMs(): Promise<number> {
+        const reply = await ctx.client.sendCommand(['TIME']);
+        return Number(reply[0]) * 1000 + Math.floor(Number(reply[1]) / 1000);
+    }
+
+    async function observeTtl(key: string): Promise<{ authorityBeforeMs: number; ttlMs: number; authorityAfterMs: number }> {
+        const authorityBeforeMs = await redisTimeMs();
+        const ttlMs = await ctx.client.pTTL(key);
+        const authorityAfterMs = await redisTimeMs();
+        return { authorityBeforeMs, ttlMs, authorityAfterMs };
+    }
+
+    function expectTtlAtAuthorityExpiry(
+        observation: { authorityBeforeMs: number; ttlMs: number; authorityAfterMs: number },
+        expiryAtMs: number
+    ): void {
+        expect(observation.ttlMs).toBeGreaterThanOrEqual(expiryAtMs - observation.authorityAfterMs - 5);
+        expect(observation.ttlMs).toBeLessThanOrEqual(expiryAtMs - observation.authorityBeforeMs + 5);
+    }
+
+    async function observeKeyTiming(key: string): Promise<{ authorityNowMs: number; ttlMs: number; exists: boolean }> {
+        const reply = await ctx.client.sendCommand<[number, number, number]>([
+            'EVAL',
+            `local t = redis.call("TIME")
+local nowMs = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
+local ttl = redis.call("PTTL", KEYS[1])
+local exists = redis.call("EXISTS", KEYS[1])
+return {nowMs, ttl, exists}`,
+            '1',
+            key
+        ]);
+        return { authorityNowMs: reply[0], ttlMs: reply[1], exists: reply[2] === 1 };
+    }
+
+    async function waitForExpiryAtOrAfter(key: string, earliestExpiryMs: number, timeoutMs: number): Promise<void> {
+        const deadline = performance.now() + timeoutMs;
+        for (;;) {
+            const observation = await observeKeyTiming(key);
+            if (!observation.exists) {
+                if (observation.authorityNowMs + 5 < earliestExpiryMs) {
+                    throw new Error(
+                        `Redis key expired at ${String(observation.authorityNowMs)} before safe boundary ${String(earliestExpiryMs)}`
+                    );
+                }
+                return;
+            }
+            if (performance.now() >= deadline) {
+                throw new Error(`Redis key did not expire within ${String(timeoutMs)}ms; last TTL was ${String(observation.ttlMs)}ms`);
+            }
+            await new Promise(resolve => setTimeout(resolve, 25));
+        }
     }
 
     // ── Fixed Window: Basic Operations ───────────────────────────────────
@@ -153,6 +206,154 @@ describe('RedisStore integration', () => {
 
     describe('token-bucket algorithm', () => {
         const algo = tokenBucket({ refillRate: 10 });
+
+        it('admits the available token when a later application clock is 100ms behind', async () => {
+            const store = createStore();
+            const now = vi.spyOn(Date, 'now');
+            try {
+                now.mockReturnValue(2_000_000_000_000);
+                const first = await store.consume('clock-skew', algo, 30, 29);
+                expect(first.limited).toBe(false);
+                expect(first.remaining).toBe(1);
+
+                now.mockReturnValue(1_999_999_999_900);
+                const second = await store.consume('clock-skew', algo, 30);
+
+                expect(second.limited).toBe(false);
+                expect(second.remaining).toBe(0);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it('does not subtract tokens when a later application clock is four seconds behind', async () => {
+            const store = createStore();
+            const now = vi.spyOn(Date, 'now');
+            try {
+                now.mockReturnValue(2_000_000_000_000);
+                const first = await store.consume('negative-offset', algo, 30);
+                expect(first.remaining).toBe(29);
+
+                now.mockReturnValue(1_999_999_996_000);
+                const second = await store.consume('negative-offset', algo, 30);
+                const state = await ctx.client.hGetAll(`${store.prefix}negative-offset`);
+
+                expect(second.limited).toBe(false);
+                expect(second.remaining).toBe(28);
+                expect(Number(state.tokens)).toBeGreaterThanOrEqual(0);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it('preserves future refill time and extends TTL across authority rollback', async () => {
+            const store = createStore();
+            const key = `${store.prefix}authority-rollback`;
+            const futureRefillMs = (await redisTimeMs()) + 10_000;
+            await ctx.client.hSet(key, { tokens: '29', lastRefillMs: String(futureRefillMs) });
+            await ctx.client.pExpire(key, 30_000);
+
+            const applicationNowMs = 2_000_000_000_000;
+            const now = vi.spyOn(Date, 'now').mockReturnValue(applicationNowMs);
+            const consumeObservation = await (async () => {
+                try {
+                    const authorityBeforeConsumeMs = await redisTimeMs();
+                    const result = await store.consume('authority-rollback', algo, 30);
+                    const authorityAfterConsumeMs = await redisTimeMs();
+                    return { authorityBeforeConsumeMs, result, authorityAfterConsumeMs };
+                } finally {
+                    now.mockRestore();
+                }
+            })();
+            const state = await ctx.client.hGetAll(key);
+            const ttlObservation = await observeTtl(key);
+            const resetAtMs = futureRefillMs + 200;
+            const expiryAtMs = futureRefillMs + 3000;
+            const resetAfterMs = consumeObservation.result.resetTime.getTime() - applicationNowMs;
+
+            expect(consumeObservation.result.limited).toBe(false);
+            expect(consumeObservation.result.remaining).toBe(28);
+            expect(state.tokens).toBe('28');
+            expect(state.lastRefillMs).toBe(String(futureRefillMs));
+            expect(resetAfterMs).toBeGreaterThanOrEqual(resetAtMs - consumeObservation.authorityAfterConsumeMs - 5);
+            expect(resetAfterMs).toBeLessThanOrEqual(resetAtMs - consumeObservation.authorityBeforeConsumeMs + 5);
+            expectTtlAtAuthorityExpiry(ttlObservation, expiryAtMs);
+        });
+
+        it('expires rollback state only after the conservative refill boundary', async () => {
+            const store = createStore();
+            const key = `${store.prefix}expiry-boundary`;
+            const futureRefillMs = (await redisTimeMs()) + 2000;
+            await ctx.client.hSet(key, { tokens: '0', lastRefillMs: String(futureRefillMs) });
+            await ctx.client.pExpire(key, 30_000);
+
+            const result = await store.consume('expiry-boundary', tokenBucket({ refillRate: 10 }), 1);
+            const ttlObservation = await observeTtl(key);
+            const expiryAtMs = futureRefillMs + 100;
+
+            expect(result.limited).toBe(true);
+            expectTtlAtAuthorityExpiry(ttlObservation, expiryAtMs);
+            await waitForExpiryAtOrAfter(key, expiryAtMs, ttlObservation.ttlMs + 2000);
+        });
+
+        it('peeks conservatively during authority rollback without mutating state or TTL', async () => {
+            const store = createStore();
+            const key = `${store.prefix}peek-rollback`;
+            const futureRefillMs = (await redisTimeMs()) + 10_000;
+            await ctx.client.hSet(key, { tokens: '0', lastRefillMs: String(futureRefillMs) });
+            await ctx.client.pExpire(key, 30_000);
+            const ttlBefore = await ctx.client.pTTL(key);
+            const applicationNowMs = futureRefillMs - 10_000;
+            const now = vi.spyOn(Date, 'now').mockReturnValue(applicationNowMs);
+            try {
+                const authorityBeforePeekMs = await redisTimeMs();
+                const result = await store.peek('peek-rollback', algo, 30);
+                const authorityAfterPeekMs = await redisTimeMs();
+                const state = await ctx.client.hGetAll(key);
+                const ttlAfter = await ctx.client.pTTL(key);
+                const retryAtMs = futureRefillMs + 100;
+                const resetAtMs = futureRefillMs + 3000;
+                const resetAfterMs = result!.resetTime.getTime() - applicationNowMs;
+
+                expect(result).toBeDefined();
+                expect(result!.limited).toBe(true);
+                expect(result!.remaining).toBe(0);
+                expect(result!.retryAfterMs).toBeGreaterThanOrEqual(retryAtMs - authorityAfterPeekMs - 5);
+                expect(result!.retryAfterMs).toBeLessThanOrEqual(retryAtMs - authorityBeforePeekMs + 5);
+                expect(resetAfterMs).toBeGreaterThanOrEqual(resetAtMs - authorityAfterPeekMs - 5);
+                expect(resetAfterMs).toBeLessThanOrEqual(resetAtMs - authorityBeforePeekMs + 5);
+                expect(state).toEqual({ tokens: '0', lastRefillMs: String(futureRefillMs) });
+                expect(ttlAfter).toBeLessThanOrEqual(ttlBefore);
+            } finally {
+                now.mockRestore();
+            }
+        });
+
+        it('keeps core draft-7 waits relative when application clocks move backward', async () => {
+            const store = createStore();
+            const limiter = rateLimit({
+                limit: 1,
+                algorithm: { type: 'token-bucket', refillRate: 1 },
+                store,
+                headers: 'draft-7'
+            });
+            const request = new Request('https://example.com/');
+            const now = vi.spyOn(Date, 'now');
+            try {
+                now.mockReturnValue(2_000_000_000_000);
+                const admitted = await limiter(request);
+                expect(admitted.limited).toBe(false);
+
+                now.mockReturnValue(1_999_999_998_000);
+                const limited = await limiter(request);
+
+                expect(limited.limited).toBe(true);
+                expect(limited.headers.RateLimit).toBe('limit=1, remaining=0, reset=1');
+                expect(limited.headers['Retry-After']).toBe('1');
+            } finally {
+                now.mockRestore();
+            }
+        });
 
         it.each([
             { limit: 0, cost: 1, retryAfterMs: 100 },
