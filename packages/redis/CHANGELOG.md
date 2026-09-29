@@ -1,5 +1,12 @@
 # @universal-rate-limit/redis
 
+## 2.1.4
+
+### Patch Changes
+
+- [#24](https://github.com/KKonstantinov/universal-rate-limit/pull/24) [`b2b7e51`](https://github.com/KKonstantinov/universal-rate-limit/commit/b2b7e51b72e03d9c4f76afcfac6653ce37891e3c) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - Use Redis server time for shared
+  token-bucket refill, preserve monotonic accounting through clock rollback, and return clock-skew-safe retry and reset durations.
+
 ## 2.1.3
 
 ### Patch Changes
