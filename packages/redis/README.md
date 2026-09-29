@@ -74,6 +74,11 @@ new RedisStore({
 });
 ```
 
+## Token-bucket time authority
+
+Token-bucket consume and peek operations use Redis server time inside their atomic Lua scripts. Refill timestamps never move backward, so application clock skew and request reordering do not subtract tokens or grant refill. Retry and reset values remain relative durations when
+they cross the Redis boundary, and bucket expiry retains state through a backward Redis-clock interval plus the refill horizon.
+
 ## Documentation
 
 **[View the full documentation](https://universal-rate-limit.vercel.app/docs)**

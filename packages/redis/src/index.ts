@@ -77,12 +77,12 @@ function assertFinite(value: number, context: string): void {
 }
 
 /**
- * All Lua scripts return a unified 4-element array:
- * [limited (0/1), remaining, resetTime (absolute ms), retryAfterMs]
+ * All Lua scripts return a 4-element array:
+ * [limited (0/1), remaining, reset timing, retryAfterMs]
  *
  * Peek scripts return [-1] when the key doesn't exist.
- * Token bucket scripts return resetTime as msUntilFull (relative), so
- * the parser adds nowMs to produce an absolute timestamp.
+ * Fixed and sliding windows return an absolute reset time. Token buckets return
+ * an authoritative relative duration, which the adapter anchors to its local clock.
  */
 
 const fixedWindowHandler: ScriptHandler = {
@@ -136,26 +136,27 @@ const tokenBucketHandler: ScriptHandler = {
     consumeScript: TOKEN_BUCKET_CONSUME,
     peekScript: TOKEN_BUCKET_PEEK,
 
-    buildConsumeArgs(fullKey, algorithm, limit, nowMs, cost) {
+    buildConsumeArgs(fullKey, algorithm, limit, _nowMs, cost) {
+        void _nowMs;
         const refillRate = algorithm.config.refillRate;
         const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
-        return [fullKey, String(refillRate), String(limit), String(nowMs), String(cost), String(refillMs)];
+        return [fullKey, String(refillRate), String(limit), String(cost), String(refillMs)];
     },
 
-    buildPeekArgs(fullKey, algorithm, limit, nowMs) {
+    buildPeekArgs(fullKey, algorithm, limit) {
         const refillRate = algorithm.config.refillRate;
         const refillMs = 'refillMs' in algorithm.config ? Number(algorithm.config.refillMs) : 1000;
-        return [fullKey, String(refillRate), String(limit), String(nowMs), String(refillMs)];
+        return [fullKey, String(refillRate), String(limit), String(refillMs)];
     },
 
-    parseConsumeResult(reply) {
-        const result = parseUnifiedResult(reply);
+    parseConsumeResult(reply, nowMs) {
+        const result = parseRelativeResult(reply, nowMs);
         if (!result) throw new Error('Unexpected null from token-bucket consume');
         return result;
     },
 
-    parsePeekResult(reply) {
-        return parseUnifiedResult(reply);
+    parsePeekResult(reply, nowMs) {
+        return parseRelativeResult(reply, nowMs);
     }
 };
 
@@ -174,6 +175,20 @@ function parseUnifiedResult(reply: RedisReply): ConsumeResult | null {
     assertFinite(resetTimeMs, 'unified');
     assertFinite(retryAfterMs, 'unified');
     return { limited, remaining, resetTime: new Date(resetTimeMs), retryAfterMs };
+}
+
+/** Parses a token-bucket result whose reset value is relative to Redis authority time. */
+function parseRelativeResult(reply: RedisReply, nowMs: number): ConsumeResult | null {
+    if (Array.isArray(reply) && reply.length === 1 && Number(reply[0]) === -1) return null;
+    assertArrayReply(reply, 4, 'token bucket');
+    const limited = Number(reply[0]) === 1;
+    const remaining = Number(reply[1]);
+    const resetAfterMs = Number(reply[2]);
+    const retryAfterMs = Number(reply[3]);
+    assertFinite(remaining, 'token bucket');
+    assertFinite(resetAfterMs, 'token bucket');
+    assertFinite(retryAfterMs, 'token bucket');
+    return { limited, remaining, resetTime: new Date(nowMs + resetAfterMs), retryAfterMs };
 }
 
 const SCRIPT_REGISTRY = new Map<string, ScriptHandler>([

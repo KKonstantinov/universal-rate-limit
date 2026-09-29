@@ -219,38 +219,42 @@ return {0, remaining, resetTime, 0}
  * KEYS[1] = rate limit key (hash)
  * ARGV[1] = refillRate (tokens per refillMs interval)
  * ARGV[2] = capacity (bucket size — may differ from rate limit)
- * ARGV[3] = nowMs (current time in milliseconds)
- * ARGV[4] = cost (tokens to consume, default 1)
- * ARGV[5] = refillMs (refill interval in milliseconds, default 1000)
+ * ARGV[3] = cost (tokens to consume, default 1)
+ * ARGV[4] = refillMs (refill interval in milliseconds, default 1000)
  *
  * Hash fields: tokens (stored as string with decimal), lastRefillMs
  *
- * Returns: { limited (0 or 1), remaining, resetTime (absolute ms), retryAfterMs }
+ * Returns: { limited (0 or 1), remaining, resetAfterMs, retryAfterMs }
  * as a four-element array.
  */
 export const TOKEN_BUCKET_CONSUME = `
 local key = KEYS[1]
 local refillRate = tonumber(ARGV[1])
 local capacity = tonumber(ARGV[2])
-local nowMs = tonumber(ARGV[3])
-local cost = tonumber(ARGV[4]) or 1
-local refillMs = tonumber(ARGV[5]) or 1000
+local cost = tonumber(ARGV[3]) or 1
+local refillMs = tonumber(ARGV[4]) or 1000
 local tokensPerMs = refillRate / refillMs
+local authorityTime = redis.call("TIME")
+local authorityNowMs = tonumber(authorityTime[1]) * 1000 + math.floor(tonumber(authorityTime[2]) / 1000)
 
 local tokensStr = redis.call("HGET", key, "tokens")
 local lastRefillStr = redis.call("HGET", key, "lastRefillMs")
 
 local tokens
 local limited
+local lastRefillMs
 
 if tokensStr == false then
     -- A new bucket has its full capacity, but the request must still fit.
     tokens = capacity
+    lastRefillMs = authorityNowMs
 else
-    local lastRefillMs = tonumber(lastRefillStr)
-    local elapsed = nowMs - lastRefillMs
+    lastRefillMs = tonumber(lastRefillStr)
+    local effectiveNowMs = math.max(authorityNowMs, lastRefillMs)
+    local elapsed = effectiveNowMs - lastRefillMs
     local refilled = elapsed * tokensPerMs
-    tokens = math.min(capacity, tonumber(tokensStr) + refilled)
+    tokens = math.max(0, math.min(capacity, tonumber(tokensStr) + refilled))
+    lastRefillMs = effectiveNowMs
 end
 
 if tokens >= cost then
@@ -261,23 +265,24 @@ else
     limited = 1
 end
 
-redis.call("HMSET", key, "tokens", tostring(tokens), "lastRefillMs", tostring(nowMs))
+redis.call("HMSET", key, "tokens", tostring(tokens), "lastRefillMs", tostring(lastRefillMs))
 
--- TTL: time to refill an empty bucket to full
-local ttlMs = math.ceil(capacity / tokensPerMs)
+-- Retain the bucket through any authority-clock rollback plus a full empty-to-full refill horizon.
+local rollbackMs = math.max(0, lastRefillMs - authorityNowMs)
+local ttlMs = rollbackMs + math.ceil(capacity / tokensPerMs)
 redis.call("PEXPIRE", key, ttlMs)
 
 local remaining
-local resetTime = nowMs + math.ceil((capacity - tokens) / tokensPerMs)
+local resetAfterMs = rollbackMs + math.ceil((capacity - tokens) / tokensPerMs)
 local retryAfterMs = 0
 if limited == 1 then
     remaining = 0
-    retryAfterMs = math.ceil((cost - tokens) / tokensPerMs)
+    retryAfterMs = rollbackMs + math.ceil((cost - tokens) / tokensPerMs)
 else
     remaining = math.max(0, math.floor(tokens))
 end
 
-return {limited, remaining, resetTime, retryAfterMs}
+return {limited, remaining, resetAfterMs, retryAfterMs}
 `;
 
 /**
@@ -286,19 +291,19 @@ return {limited, remaining, resetTime, retryAfterMs}
  * KEYS[1] = rate limit key (hash)
  * ARGV[1] = refillRate
  * ARGV[2] = capacity (bucket size)
- * ARGV[3] = nowMs
- * ARGV[4] = refillMs (refill interval in milliseconds, default 1000)
+ * ARGV[3] = refillMs (refill interval in milliseconds, default 1000)
  *
- * Returns: { limited (0 or 1), remaining, resetTime (absolute ms), retryAfterMs }
+ * Returns: { limited (0 or 1), remaining, resetAfterMs, retryAfterMs }
  * as a four-element array. If the key doesn't exist, returns {-1}.
  */
 export const TOKEN_BUCKET_PEEK = `
 local key = KEYS[1]
 local refillRate = tonumber(ARGV[1])
 local capacity = tonumber(ARGV[2])
-local nowMs = tonumber(ARGV[3])
-local refillMs = tonumber(ARGV[4]) or 1000
+local refillMs = tonumber(ARGV[3]) or 1000
 local tokensPerMs = refillRate / refillMs
+local authorityTime = redis.call("TIME")
+local authorityNowMs = tonumber(authorityTime[1]) * 1000 + math.floor(tonumber(authorityTime[2]) / 1000)
 
 local tokensStr = redis.call("HGET", key, "tokens")
 
@@ -307,17 +312,19 @@ if tokensStr == false then
 end
 
 local lastRefillMs = tonumber(redis.call("HGET", key, "lastRefillMs"))
-local elapsed = nowMs - lastRefillMs
+local effectiveNowMs = math.max(authorityNowMs, lastRefillMs)
+local elapsed = effectiveNowMs - lastRefillMs
 local refilled = elapsed * tokensPerMs
-local tokens = math.min(capacity, tonumber(tokensStr) + refilled)
+local tokens = math.max(0, math.min(capacity, tonumber(tokensStr) + refilled))
+local rollbackMs = math.max(0, lastRefillMs - authorityNowMs)
 
 local limited = tokens < 1 and 1 or 0
 local remaining = math.max(0, math.floor(tokens))
-local resetTime = nowMs + math.ceil((capacity - tokens) / tokensPerMs)
+local resetAfterMs = rollbackMs + math.ceil((capacity - tokens) / tokensPerMs)
 local retryAfterMs = 0
 if limited == 1 then
-    retryAfterMs = math.ceil((1 - tokens) / tokensPerMs)
+    retryAfterMs = rollbackMs + math.ceil((1 - tokens) / tokensPerMs)
 end
 
-return {limited, remaining, resetTime, retryAfterMs}
+return {limited, remaining, resetAfterMs, retryAfterMs}
 `;

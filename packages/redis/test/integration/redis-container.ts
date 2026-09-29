@@ -11,7 +11,9 @@ export interface RedisTestContext {
 }
 
 export async function startRedisContainer(): Promise<RedisTestContext> {
-    const container = await new GenericContainer('redis:7-alpine')
+    const container = await new GenericContainer(
+        'redis:7.4.11-bookworm@sha256:c6eabf748fc7a61dbb5a705c78bcf3d6377b1127a97d0ce965c11c44ba46896f'
+    )
         .withExposedPorts(6379)
         .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))
         .start();
