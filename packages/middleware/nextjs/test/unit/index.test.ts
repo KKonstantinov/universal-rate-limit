@@ -42,6 +42,16 @@ describe('withRateLimit', () => {
         expect(res.status).toBe(429);
     });
 
+    it('forwards the route context (dynamic params) to the handler', async () => {
+        const handler = withRateLimit(
+            async (_request: Request, context?: { params: Promise<{ id: string }> }) => Response.json((await context?.params) ?? null),
+            { limit: 5, algorithm: { type: 'sliding-window', windowMs: 60_000 } }
+        );
+
+        const res = await handler(createRequest('30.0.0.9'), { params: Promise.resolve({ id: '42' }) });
+        expect(await res.json()).toEqual({ id: '42' });
+    });
+
     it('returns custom message when rate limited', async () => {
         const handler = withRateLimit(async () => new Response('Hello'), {
             limit: 1,

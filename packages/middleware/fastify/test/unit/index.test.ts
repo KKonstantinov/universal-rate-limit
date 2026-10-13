@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 import { fastifyRateLimit } from '../../src/index.js';
 
 let app: FastifyInstance | undefined;
 
-async function createApp(options = {}): Promise<FastifyInstance> {
-    app = Fastify();
+async function createApp(options = {}, fastifyOptions: FastifyServerOptions = {}): Promise<FastifyInstance> {
+    app = Fastify(fastifyOptions);
     await app.register(fastifyRateLimit, { limit: 2, algorithm: { type: 'sliding-window', windowMs: 60_000 }, ...options });
     app.get('/', async () => 'OK');
     await app.ready();
@@ -66,5 +66,28 @@ describe('fastifyRateLimit', () => {
 
         expect(res.statusCode).toBe(429);
         expect(JSON.parse(res.body)).toEqual({ error: 'rate_limited' });
+    });
+
+    it('ignores a client-supplied X-Forwarded-For unless trustProxy is enabled', async () => {
+        const server = await createApp();
+
+        // Rotating the header must not buy a fresh limit per request
+        await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.5' } });
+        await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.6' } });
+        const res = await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.7' } });
+
+        expect(res.statusCode).toBe(429);
+    });
+
+    it('keys by the forwarded client IP when trustProxy is enabled', async () => {
+        const server = await createApp({ limit: 1 }, { trustProxy: 'loopback' });
+
+        const first = await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.8' } });
+        const otherClient = await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.9' } });
+        const firstAgain = await server.inject({ method: 'GET', url: '/', headers: { 'x-forwarded-for': '20.0.0.8' } });
+
+        expect(first.statusCode).toBe(200);
+        expect(otherClient.statusCode).toBe(200);
+        expect(firstAgain.statusCode).toBe(429);
     });
 });

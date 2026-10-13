@@ -1,7 +1,9 @@
 import Fastify from 'fastify';
 import { fastifyRateLimit } from '@universal-rate-limit/fastify';
 
-const app = Fastify();
+// Trust a reverse proxy on the same host, so request.ip (the default rate limit key)
+// is the client from X-Forwarded-For. Set this to match your real proxy setup.
+const app = Fastify({ trustProxy: 'loopback' });
 
 await app.register(fastifyRateLimit, {
     algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute

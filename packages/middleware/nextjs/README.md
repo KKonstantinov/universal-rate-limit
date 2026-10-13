@@ -11,8 +11,8 @@
   <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/@universal-rate-limit/nextjs.svg" alt="license" /></a>
 </p>
 
-Next.js App Router wrapper and Edge middleware for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window, sliding-window, and token-bucket algorithms, pluggable stores (memory,
-Redis, or your own), and IETF-compliant rate limit headers out of the box.
+Next.js App Router wrapper and proxy/middleware limiter for [universal-rate-limit](https://www.npmjs.com/package/universal-rate-limit) — a zero-dependency rate limiter built on web standards. Supports fixed-window, sliding-window, and token-bucket algorithms, pluggable stores
+(memory, Redis, or your own), and IETF-compliant rate limit headers out of the box.
 
 > **[Try the playground](https://universal-rate-limit.vercel.app/playground)** to see rate limiting in action.
 
@@ -42,12 +42,26 @@ export const GET = withRateLimit(handler, {
 });
 ```
 
-### Edge Middleware
-
-Use `nextjsRateLimit` for custom logic in Edge Middleware:
+`withRateLimit` forwards the route context, so dynamic routes receive their `params`:
 
 ```ts
-// middleware.ts
+// app/api/users/[id]/route.ts
+import { withRateLimit } from '@universal-rate-limit/nextjs';
+
+async function handler(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    return Response.json({ id });
+}
+
+export const GET = withRateLimit(handler, { limit: 30 });
+```
+
+### Proxy (site-wide)
+
+Use `nextjsRateLimit` in `proxy.ts` (Next.js 16). On Next.js 14/15 the same code goes in `middleware.ts` with the function named `middleware`.
+
+```ts
+// proxy.ts
 import { nextjsRateLimit } from '@universal-rate-limit/nextjs';
 import { NextResponse } from 'next/server';
 
@@ -56,7 +70,7 @@ const limiter = nextjsRateLimit({
     limit: 60
 });
 
-export async function middleware(request: Request) {
+export async function proxy(request: Request) {
     const result = await limiter(request);
 
     if (result.limited) {
@@ -72,7 +86,17 @@ export async function middleware(request: Request) {
     }
     return response;
 }
+
+export const config = { matcher: ['/api/:path*'] };
 ```
+
+### Production: use a shared store
+
+The default `MemoryStore` lives in one process. Serverless functions (Vercel and similar), proxy instances and multiple servers each keep their own counts, so the effective limit is multiplied by the number of instances. Pass a
+[`RedisStore`](https://www.npmjs.com/package/@universal-rate-limit/redis) to share state. Clients such as ioredis and node-redis need the Node.js runtime: Next.js 16 runs `proxy.ts` on Node.js, while Next.js 14/15 `middleware.ts` defaults to the Edge runtime (opt into Node.js
+with `runtime: 'nodejs'` in its `config` on 15.5+).
+
+The default key reads `x-forwarded-for` and related headers. That is safe on Vercel, which overwrites them; behind another proxy or CDN, set `keyGenerator` to a header your proxy controls.
 
 ## Options
 

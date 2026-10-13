@@ -178,7 +178,14 @@ const limiter = rateLimit({
 
 ### Custom Key Generator
 
-By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`).
+The default key is the client IP:
+
+- **Core, Hono and Next.js** read common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`), falling back
+  to `127.0.0.1`. Clients can set these headers themselves, so this is only safe behind a proxy or platform that overwrites them (for
+  example Vercel). Otherwise a client can rotate `x-forwarded-for` to get a fresh limit on every request.
+- **Express and Fastify** use the framework's `req.ip`, which honours Express's `trust proxy` setting and Fastify's `trustProxy` option.
+  Behind a reverse proxy, configure those so `req.ip` is the client rather than the proxy.
+
 Override this for custom logic:
 
 ```ts

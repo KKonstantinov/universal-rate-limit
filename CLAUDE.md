@@ -19,7 +19,7 @@ pnpm format:check             # Prettier check
 pnpm typecheck                # tsgo --noEmit per package
 ```
 
-Run a single test file: `pnpm vitest run packages/core/test/rate-limit.test.ts`
+Run a single test file: `pnpm vitest run packages/core/test/unit/index.test.ts`
 
 Run tests for one package: `cd packages/core && pnpm test`
 
@@ -27,23 +27,29 @@ Run tests for one package: `cd packages/core && pnpm test`
 
 - **`packages/core`** — `universal-rate-limit`: framework-agnostic rate limiter using Web Standard `Request`/`Response`. Zero dependencies. Exports `rateLimit()`, `MemoryStore`, `buildRateLimitResponse()`.
 - **`packages/redis`** — `@universal-rate-limit/redis`: Redis store using Lua scripts for atomic operations. Works with any Redis client via `SendCommandFn` abstraction.
-- **`packages/middleware/{express,fastify,hono,nextjs}`** — Thin adapters that convert framework requests to Web `Request`, call core, set headers, handle 429s.
+- **`packages/middleware/{express,fastify,hono,nextjs}`** — Thin adapters that call core with the framework's request type (`rateLimit<TRequest>`; Hono and Next.js use the Web `Request`), set headers, handle 429s.
 - **`packages/site`** — Documentation site built with [Fumadocs](https://www.fumadocs.dev/) (Next.js). Content lives in `packages/site/content/docs/`.
 - **`packages/benchmarks`** — Private package. Run with `pnpm bench`, `pnpm bench:throughput`, etc.
 
 ## Architecture
 
-**Core flow**: `rateLimit(options)` returns a function `(request) => RateLimitResult`. The result contains `limited`, `remaining`, `resetTime`, and IETF-compliant `headers`.
+**Core flow**: `rateLimit(options)` returns a function `(request) => RateLimitResult | Promise<RateLimitResult>` (synchronous when the store and callbacks are). The result contains `limited`, `limit`, `remaining`, `resetTime`, and IETF-compliant `headers`.
 
-**Algorithms**: Fixed-window (simple counter) and sliding-window (weighted previous + current window). Both use the same `Store` interface (`increment()` / `get()` / `reset()`).
+**Algorithms**: Fixed-window (simple counter), sliding-window (weighted previous + current window), and token-bucket (`limit` is the capacity; continuous refill of `refillRate` tokens per `refillMs`). Each is a pure `Algorithm` (`consume()` / `peek()` / `unconsume()` / `ttlMs()`)
+that owns its opaque state; `rateLimit()` validates `windowMs` / `refillRate` / `refillMs` are positive numbers.
 
-**MemoryStore**: Dual-map design (`current` + `previous` window maps) with background cleanup on `.unref()` timer.
+**Store interface**: `consume(key, algorithm, limit, cost)`, `resetKey()`, `resetAll()`, optional `peek()` / `unconsume()` / `shutdown()` and `prefix`. Stores persist the algorithm's state; they hold no rate limiting math.
+
+**MemoryStore**: Single `Map` of algorithm state with TTL-based background cleanup on an `.unref()` timer.
 
 **RedisStore**: Lua scripts loaded via `EVALSHA` with auto-reload on cache eviction.
 
 **Header formats**: draft-7 (default, combined `RateLimit:` header), draft-6 (separate headers), optional legacy `X-RateLimit-*`.
 
-**Key generator default**: Checks `x-forwarded-for` → `x-real-ip` → `cf-connecting-ip` → `fly-client-ip`, falls back to `127.0.0.1`.
+**Key generator default**: Core, Hono and Next.js use `extractClientIp()`: `x-forwarded-for` → `x-real-ip` → `cf-connecting-ip` → `fly-client-ip`, falling back to `127.0.0.1` (client-controlled unless a proxy overwrites them). Express and Fastify use the framework's `req.ip`,
+which honours `trust proxy` / `trustProxy`; do not read forwarding headers directly in those adapters (it lets clients pick their own key).
+
+**Next.js `withRateLimit`**: forwards the route context (`{ params }`) to the wrapped handler; `nextjsRateLimit` returns the core limiter for `proxy.ts` / `middleware.ts`.
 
 ## Code Conventions
 

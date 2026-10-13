@@ -88,13 +88,14 @@ npm install @universal-rate-limit/redis
 
 ```ts
 import { rateLimit } from 'universal-rate-limit';
-import { RedisStore } from '@universal-rate-limit/redis';
+import { RedisStore, type RedisReply } from '@universal-rate-limit/redis';
 import Redis from 'ioredis';
 
 const redis = new Redis();
 
 const store = new RedisStore({
-    sendCommand: (...args: string[]) => redis.call(...args)
+    // ioredis types `call()` as Promise<unknown>, so assert the reply type
+    sendCommand: (command, ...args) => redis.call(command, ...args) as Promise<RedisReply>
 });
 
 const limiter = rateLimit({
@@ -163,7 +164,7 @@ instead:
 
 ```ts
 const limiter = rateLimit({
-    store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+    store, // the RedisStore from above
     failOpen: true // Allow requests if Redis is down
 });
 ```
