@@ -1,5 +1,15 @@
 # @universal-rate-limit/redis
 
+## 2.1.5
+
+### Patch Changes
+
+- [#32](https://github.com/KKonstantinov/universal-rate-limit/pull/32) [`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - Docs: fix the ioredis
+  `sendCommand` example so it compiles under strict TypeScript, and clarify which Redis clients and services work.
+
+- Updated dependencies [[`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed)]:
+    - universal-rate-limit@2.2.1
+
 ## 2.1.4
 
 ### Patch Changes

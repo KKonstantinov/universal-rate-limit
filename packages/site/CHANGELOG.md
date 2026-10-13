@@ -1,5 +1,12 @@
 # @universal-rate-limit/site
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed)]:
+    - universal-rate-limit@2.2.1
+
 ## 0.1.0
 
 ### Minor Changes
