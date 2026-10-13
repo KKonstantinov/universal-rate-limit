@@ -1,5 +1,17 @@
 # @universal-rate-limit/nextjs
 
+## 2.2.0
+
+### Minor Changes
+
+- [#32](https://github.com/KKonstantinov/universal-rate-limit/pull/32) [`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - `withRateLimit` now forwards the
+  Next.js route context to the wrapped handler, so dynamic routes (`app/api/users/[id]/route.ts`) receive their `params`. `NextjsApiHandler` takes an optional `TContext` type parameter.
+
+### Patch Changes
+
+- Updated dependencies [[`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed)]:
+    - universal-rate-limit@2.2.1
+
 ## 2.1.0
 
 ### Minor Changes

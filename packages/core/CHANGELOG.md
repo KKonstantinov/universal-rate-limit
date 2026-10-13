@@ -1,5 +1,12 @@
 # universal-rate-limit
 
+## 2.2.1
+
+### Patch Changes
+
+- [#32](https://github.com/KKonstantinov/universal-rate-limit/pull/32) [`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - `rateLimit()` now throws a
+  `RangeError` when `windowMs`, `refillRate` or `refillMs` is missing or `NaN`, not only when it is zero or negative. Untyped configs such as `{ type: 'token-bucket' }` previously produced a limiter that silently misbehaved.
+
 ## 2.2.0
 
 ### Minor Changes

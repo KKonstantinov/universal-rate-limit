@@ -1,5 +1,18 @@
 # @universal-rate-limit/express
 
+## 2.2.0
+
+### Minor Changes
+
+- [#32](https://github.com/KKonstantinov/universal-rate-limit/pull/32) [`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed) Thanks [@KKonstantinov](https://github.com/KKonstantinov)! - **Security fix:** the default key
+  is now the framework's `req.ip`, which honours Express's `trust proxy` setting and Fastify's `trustProxy` option. Previously the adapters read `X-Forwarded-For` (and similar headers) before `req.ip`, so a client could rotate that header to get a fresh limit on every request.
+  Behind a reverse proxy, configure `trust proxy` / `trustProxy` so `req.ip` is the client; otherwise all clients share the proxy's IP. Apps that pass their own `keyGenerator` are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [[`21ac427`](https://github.com/KKonstantinov/universal-rate-limit/commit/21ac427405b11f98e75a15f3d6807844afc941ed)]:
+    - universal-rate-limit@2.2.1
+
 ## 2.1.0
 
 ### Minor Changes
