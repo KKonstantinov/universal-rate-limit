@@ -7,6 +7,7 @@
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/dm/universal-rate-limit.svg" alt="npm downloads" /></a>
   <a href="https://www.npmjs.com/package/universal-rate-limit"><img src="https://img.shields.io/npm/types/universal-rate-limit.svg" alt="types" /></a>
   <a href="https://github.com/kkonstantinov/universal-rate-limit/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/universal-rate-limit.svg" alt="license" /></a>
+  <a href="https://skills.sh/KKonstantinov/universal-rate-limit"><img src="https://skills.sh/b/KKonstantinov/universal-rate-limit" alt="skills.sh" /></a>
 </p>
 
 <p align="center">
@@ -48,6 +49,16 @@ npm install @universal-rate-limit/fastify
 npm install @universal-rate-limit/hono
 npm install @universal-rate-limit/nextjs
 ```
+
+### Agent Skill
+
+Teach your coding agent (Claude Code, Cursor, Codex, and other agents supported by [skills.sh](https://skills.sh)) to use universal-rate-limit - adapters, algorithms, Redis, and safe client keys:
+
+```bash
+npx skills add KKonstantinov/universal-rate-limit
+```
+
+The skill lives in [`skills/universal-rate-limit`](skills/universal-rate-limit/SKILL.md).
 
 ## Quick Start
 
