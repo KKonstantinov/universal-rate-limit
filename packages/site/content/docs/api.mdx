@@ -93,7 +93,8 @@ const response = await buildRateLimitResponse(request, result, {
 ### `extractClientIp(request)`
 
 Extract the client IP from a Web Standard `Request` by checking well-known proxy headers (`x-forwarded-for`, `x-real-ip`,
-`cf-connecting-ip`, `fly-client-ip`) in order. Returns the first IP found, or `'127.0.0.1'` when no header is present.
+`cf-connecting-ip`, `fly-client-ip`) in order. Returns the first IP found, or `'127.0.0.1'` when no header is present. This is the default
+key for core, Hono and Next.js. Clients can set these headers, so rely on it only behind a proxy or platform that overwrites them.
 
 ```ts
 import { extractClientIp } from 'universal-rate-limit';
@@ -196,10 +197,11 @@ const store = new MemoryStore({ prefix: 'my-app:', cleanupIntervalMs: 30_000 });
 Redis-backed store from `@universal-rate-limit/redis`. Uses Lua scripts for atomic operations.
 
 ```ts
-import { RedisStore } from '@universal-rate-limit/redis';
+import { RedisStore, type RedisReply } from '@universal-rate-limit/redis';
 
+// `redis` is an ioredis client; with node-redis use `(...args) => client.sendCommand(args)`
 const store = new RedisStore({
-    sendCommand: (...args) => redis.call(...args),
+    sendCommand: (command, ...args) => redis.call(command, ...args) as Promise<RedisReply>,
     prefix: 'rl:'
 });
 ```
@@ -278,7 +280,8 @@ import { RedisStore } from '@universal-rate-limit/redis';
 import { expressRateLimit } from '@universal-rate-limit/express';
 ```
 
-`expressRateLimit(options?)` — Returns an Express `RequestHandler`.
+`expressRateLimit(options?)` — Returns an Express `RequestHandler`. Callbacks receive the `express.Request`; the default key is `req.ip`
+(honours `trust proxy`).
 
 ### `@universal-rate-limit/fastify`
 
@@ -286,7 +289,8 @@ import { expressRateLimit } from '@universal-rate-limit/express';
 import { fastifyRateLimit } from '@universal-rate-limit/fastify';
 ```
 
-`fastifyRateLimit` — Fastify plugin. Register with `fastify.register(fastifyRateLimit, options)`.
+`fastifyRateLimit` — Fastify plugin. Register with `fastify.register(fastifyRateLimit, options)`. Callbacks receive the `FastifyRequest`;
+the default key is `request.ip` (honours `trustProxy`).
 
 ### `@universal-rate-limit/hono`
 
@@ -302,8 +306,9 @@ import { honoRateLimit } from '@universal-rate-limit/hono';
 import { withRateLimit, nextjsRateLimit } from '@universal-rate-limit/nextjs';
 ```
 
-- `withRateLimit(handler, options?)` — Wraps a Next.js App Router handler with rate limiting.
-- `nextjsRateLimit(options?)` — Creates a limiter for Edge Middleware use.
+- `withRateLimit(handler, options?)` — Wraps a Next.js App Router handler with rate limiting. The route context (dynamic `params`) is
+  forwarded to `handler`.
+- `nextjsRateLimit(options?)` — Creates a limiter for `proxy.ts` (Next.js 16), `middleware.ts` (14/15) or use inside a route handler.
 
 All middleware packages also re-export: `RateLimitOptions`, `RateLimitResult`, `Store`, `ConsumeResult`, `MemoryStore`, `IP_HEADERS`,
 `extractClientIp`.

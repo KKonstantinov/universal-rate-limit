@@ -74,13 +74,16 @@ Scale across multiple instances with the official Redis store:
 
 ```ts
 import { rateLimit } from 'universal-rate-limit';
-import { RedisStore } from '@universal-rate-limit/redis';
+import { RedisStore, type RedisReply } from '@universal-rate-limit/redis';
+import Redis from 'ioredis';
+
+const redis = new Redis();
 
 const limiter = rateLimit({
     algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60,
     store: new RedisStore({
-        sendCommand: (...args) => redis.call(...args)
+        sendCommand: (command, ...args) => redis.call(command, ...args) as Promise<RedisReply>
     })
 });
 ```

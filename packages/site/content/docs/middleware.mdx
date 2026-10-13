@@ -8,8 +8,7 @@ framework-specific options.
 
 ```mermaid
 flowchart LR
-    A["Framework Request\n(Express, Fastify, etc.)"] --> B["Convert to\nWeb Request"]
-    B --> C["Core\nrateLimit()"]
+    A["Framework Request\n(Express, Fastify, etc.)"] --> C["Core\nrateLimit()"]
     C --> D["RateLimitResult"]
     D --> E["Set headers on\nframework response"]
     E --> F{limited?}
@@ -49,7 +48,13 @@ app.use(
 );
 ```
 
-The Express adapter converts `express.Request` to a Web Standard `Request` internally, extracting headers and URL information.
+The Express adapter passes the Express request straight to the limiter, so `keyGenerator`, `limit`, `cost` and `skip` receive an
+`express.Request` (with `req.ip`, `req.body`, and so on).
+
+The default key is `req.ip`, which honours Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Behind a
+reverse proxy, set it to match your setup (for example `app.set('trust proxy', 1)` for one proxy hop); otherwise every client shares the
+proxy's IP. Avoid `true` unless every request arrives through a proxy that overwrites `X-Forwarded-For`, because it trusts whatever the
+client sends.
 
 ### Fastify
 
@@ -70,7 +75,26 @@ await fastify.register(fastifyRateLimit, {
 });
 ```
 
-The Fastify adapter registers an `onRequest` hook that runs before route handlers.
+The Fastify adapter registers an `onRequest` hook that runs before route handlers. Callbacks receive the `FastifyRequest`.
+
+The default key is `request.ip`, which honours Fastify's [`trustProxy`](https://fastify.dev/docs/latest/Reference/Server/#trustproxy)
+option. Behind a reverse proxy, set it to the proxy's address or CIDR (for example `Fastify({ trustProxy: '10.0.0.0/8' })`); otherwise every
+client shares the proxy's IP.
+
+The plugin applies to the context it is registered in. Registered at the top level it limits every route; to limit only some routes,
+register it inside an encapsulated plugin:
+
+```ts
+fastify.get('/health', async () => ({ ok: true })); // not limited
+
+await fastify.register(
+    async api => {
+        await api.register(fastifyRateLimit, { limit: 60 });
+        api.get('/users', async () => []);
+    },
+    { prefix: '/api' }
+);
+```
 
 ### Hono
 
@@ -182,12 +206,27 @@ export const GET = withRateLimit(handler, {
 });
 ```
 
-#### Edge Middleware
-
-Use `nextjsRateLimit` for Edge Middleware:
+`withRateLimit` forwards the route context, so dynamic routes receive their `params`:
 
 ```ts
-// middleware.ts
+// app/api/users/[id]/route.ts
+import { withRateLimit } from '@universal-rate-limit/nextjs';
+
+async function handler(request: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    return Response.json({ id });
+}
+
+export const GET = withRateLimit(handler, { limit: 30 });
+```
+
+#### Proxy (site-wide)
+
+Use `nextjsRateLimit` in `proxy.ts` (Next.js 16). On Next.js 14/15 the same code goes in `middleware.ts` with the function named
+`middleware`.
+
+```ts
+// proxy.ts
 import { nextjsRateLimit } from '@universal-rate-limit/nextjs';
 import { NextResponse } from 'next/server';
 
@@ -196,7 +235,7 @@ const limiter = nextjsRateLimit({
     limit: 100
 });
 
-export async function middleware(request: Request) {
+export async function proxy(request: Request) {
     const result = await limiter(request);
 
     if (result.limited) {
@@ -212,7 +251,18 @@ export async function middleware(request: Request) {
     }
     return response;
 }
+
+export const config = { matcher: ['/api/:path*'] };
 ```
+
+**Use a shared store in production.** The default `MemoryStore` lives in one process. Serverless functions (Vercel and similar), proxy
+instances and multiple servers each keep their own counts, so the effective limit is multiplied by the number of instances. Pass a
+[`RedisStore`](/docs/stores#redis-store) to share state. Clients such as ioredis and node-redis need the Node.js runtime: Next.js 16 runs
+`proxy.ts` on Node.js, while Next.js 14/15 `middleware.ts` defaults to the Edge runtime (opt into Node.js with `runtime: 'nodejs'` in its
+`config` on 15.5+).
+
+The default key reads `x-forwarded-for` and related headers. That is safe on Vercel, which overwrites them; behind another proxy or CDN, set
+`keyGenerator` to a header your proxy controls.
 
 ## Response Headers
 

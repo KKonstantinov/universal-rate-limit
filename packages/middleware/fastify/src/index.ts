@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fp from 'fastify-plugin';
-import { rateLimit, buildRateLimitResponse, IP_HEADERS } from 'universal-rate-limit';
+import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions } from 'universal-rate-limit';
 
 export type {
@@ -18,16 +18,14 @@ export { MemoryStore, fixedWindow, slidingWindow, tokenBucket, IP_HEADERS, extra
 export type FastifyRateLimitOptions = RateLimitOptions<FastifyRequest>;
 
 /**
- * Default key generator for Fastify that reads client IP from well-known
- * proxy headers, falling back to Fastify's `request.ip`.
+ * Default key generator for Fastify: the client IP from `request.ip`.
+ *
+ * `request.ip` honours Fastify's `trustProxy` option, so forwarding headers
+ * such as `X-Forwarded-For` are only used when the server trusts the proxy
+ * that set them. Reading those headers directly would let any client pick its
+ * own key.
  */
 function fastifyDefaultKeyGenerator(req: FastifyRequest): string {
-    for (const header of IP_HEADERS) {
-        const value = req.headers[header];
-        if (typeof value === 'string') {
-            return value.split(',')[0].trim();
-        }
-    }
     return req.ip;
 }
 

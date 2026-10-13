@@ -52,7 +52,18 @@ app.listen(3000);
 
 ## Options
 
-Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, `failOpen`, and `prefix`.
+Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, `failOpen`, and `prefix`. Callbacks such as `keyGenerator` receive the
+Express `req`.
+
+## Client IP
+
+The default key is `req.ip`, which honours Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Behind a reverse proxy or load balancer, set it to match your setup, or every client will share the proxy's IP:
+
+```ts
+app.set('trust proxy', 1); // one proxy hop in front of the app
+```
+
+Avoid `true` unless every request arrives through a proxy that overwrites `X-Forwarded-For`, because it trusts whatever the client sends.
 
 ## Example
 

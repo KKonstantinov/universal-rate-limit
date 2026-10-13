@@ -78,4 +78,30 @@ describe('expressRateLimit', () => {
         expect(res.status).toBe(429);
         expect(await res.text()).toBe('Slow down!');
     });
+
+    it('ignores a client-supplied X-Forwarded-For unless trust proxy is enabled', async () => {
+        const app = createApp();
+        const base = await listen(app);
+
+        // Rotating the header must not buy a fresh limit per request
+        await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.5' } });
+        await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.6' } });
+        const res = await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.7' } });
+
+        expect(res.status).toBe(429);
+    });
+
+    it('keys by the forwarded client IP when trust proxy is enabled', async () => {
+        const app = createApp({ limit: 1 });
+        app.set('trust proxy', 'loopback');
+        const base = await listen(app);
+
+        const first = await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.8' } });
+        const otherClient = await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.9' } });
+        const firstAgain = await fetch(base, { headers: { 'x-forwarded-for': '10.0.0.8' } });
+
+        expect(first.status).toBe(200);
+        expect(otherClient.status).toBe(200);
+        expect(firstAgain.status).toBe(429);
+    });
 });

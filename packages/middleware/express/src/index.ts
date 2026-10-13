@@ -1,5 +1,5 @@
 import type { Request as ExpressRequest, Response as ExpressResponse, NextFunction, RequestHandler } from 'express';
-import { rateLimit, buildRateLimitResponse, IP_HEADERS } from 'universal-rate-limit';
+import { rateLimit, buildRateLimitResponse } from 'universal-rate-limit';
 import type { RateLimitOptions, RateLimitResult } from 'universal-rate-limit';
 
 export type {
@@ -17,17 +17,13 @@ export { MemoryStore, fixedWindow, slidingWindow, tokenBucket, IP_HEADERS, extra
 export type ExpressRateLimitOptions = RateLimitOptions<ExpressRequest>;
 
 /**
- * Default key generator for Express that reads client IP from well-known
- * proxy headers, falling back to Express's `req.ip` (which respects the
- * `trust proxy` setting).
+ * Default key generator for Express: the client IP from `req.ip`.
+ *
+ * `req.ip` honours Express's `trust proxy` setting, so forwarding headers such
+ * as `X-Forwarded-For` are only used when the app trusts the proxy that set
+ * them. Reading those headers directly would let any client pick its own key.
  */
 function expressDefaultKeyGenerator(req: ExpressRequest): string {
-    for (const header of IP_HEADERS) {
-        const value = req.headers[header];
-        if (typeof value === 'string') {
-            return value.split(',')[0].trim();
-        }
-    }
     return req.ip ?? '127.0.0.1';
 }
 

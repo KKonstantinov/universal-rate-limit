@@ -41,7 +41,7 @@ const mappings = [
         source: 'packages/middleware/nextjs/README.md',
         target: 'nextjs.mdx',
         title: 'Next.js Middleware (@universal-rate-limit/nextjs)',
-        description: 'Next.js App Router wrapper and Edge Middleware for universal-rate-limit.'
+        description: 'Next.js App Router wrapper and proxy/middleware limiter for universal-rate-limit.'
     }
 ];
 

@@ -9,4 +9,3 @@ packages/site/content/docs/packages/
 # Lock files
 pnpm-lock.yaml
 .npmrc
-next-env.d.ts

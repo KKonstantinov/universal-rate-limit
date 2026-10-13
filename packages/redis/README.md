@@ -26,7 +26,8 @@ npm install @universal-rate-limit/redis universal-rate-limit
 
 ## Usage
 
-Provide a `sendCommand` function that sends raw Redis commands. This makes the store compatible with any Redis client (redis, ioredis, Upstash, etc.).
+Provide a `sendCommand` function that sends raw Redis commands. This makes the store compatible with any Redis client that can send raw commands, such as node-redis (`redis`) and ioredis. Managed services that speak the Redis protocol, such as Upstash over its `rediss://`
+endpoint, work through those clients.
 
 ### With node-redis
 
@@ -52,7 +53,7 @@ const limiter = rateLimit({
 ```ts
 import Redis from 'ioredis';
 import { rateLimit } from 'universal-rate-limit';
-import { RedisStore } from '@universal-rate-limit/redis';
+import { RedisStore, type RedisReply } from '@universal-rate-limit/redis';
 
 const redis = new Redis();
 
@@ -60,7 +61,8 @@ const limiter = rateLimit({
     algorithm: { type: 'sliding-window', windowMs: 60_000 },
     limit: 60,
     store: new RedisStore({
-        sendCommand: (...args) => redis.call(args[0], ...args.slice(1))
+        // ioredis types `call()` as Promise<unknown>, so assert the reply type
+        sendCommand: (command, ...args) => redis.call(command, ...args) as Promise<RedisReply>
     })
 });
 ```

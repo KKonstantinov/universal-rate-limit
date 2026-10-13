@@ -123,7 +123,10 @@ const limiter = rateLimit({
 
 ### Custom Key Generator
 
-By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`). Override this for custom logic:
+By default, the client IP is extracted from common proxy headers (`x-forwarded-for`, `x-real-ip`, `cf-connecting-ip`, `fly-client-ip`), falling back to `127.0.0.1`. Clients can set these headers themselves, so the default is only safe behind a proxy or platform that overwrites
+them (for example Vercel, or Cloudflare's `cf-connecting-ip`). Otherwise a client can rotate `x-forwarded-for` to get a fresh limit per request. The Express and Fastify adapters default to the framework's `req.ip` instead, which honours their trust-proxy settings.
+
+Override this for custom logic:
 
 ```ts
 const limiter = rateLimit({
@@ -238,7 +241,7 @@ If the store throws an error, the rate limiter re-throws by default. Set `failOp
 
 ```ts
 const limiter = rateLimit({
-    store: new RedisStore({ sendCommand: (...args) => redis.call(...args) }),
+    store: new RedisStore({ sendCommand: (command, ...args) => redis.call(command, ...args) as Promise<RedisReply> }),
     failOpen: true
 });
 ```

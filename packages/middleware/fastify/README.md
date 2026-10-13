@@ -44,7 +44,32 @@ await fastify.listen({ port: 3000 });
 
 ## Options
 
-Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, `failOpen`, and `prefix`.
+Accepts all [core options](https://www.npmjs.com/package/universal-rate-limit) — `limit`, `algorithm`, `cost`, `store`, `keyGenerator`, `skip`, `handler`, `message`, `statusCode`, `headers`, `legacyHeaders`, `failOpen`, and `prefix`. Callbacks such as `keyGenerator` receive the
+`FastifyRequest`.
+
+## Client IP
+
+The default key is `request.ip`, which honours Fastify's [`trustProxy`](https://fastify.dev/docs/latest/Reference/Server/#trustproxy) option. Behind a reverse proxy or load balancer, set it to the proxy's address or CIDR, or every client will share the proxy's IP:
+
+```ts
+const fastify = Fastify({ trustProxy: '10.0.0.0/8' });
+```
+
+## Scoping to some routes
+
+The plugin applies to the context it is registered in. Register it inside an encapsulated plugin to limit only those routes:
+
+```ts
+fastify.get('/health', async () => ({ ok: true })); // not limited
+
+await fastify.register(
+    async api => {
+        await api.register(fastifyRateLimit, { limit: 60 });
+        api.get('/users', async () => []);
+    },
+    { prefix: '/api' }
+);
+```
 
 ## Example
 

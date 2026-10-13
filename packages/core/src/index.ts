@@ -900,14 +900,15 @@ export function rateLimit<TRequest = Request>(
 
     const algo = resolveAlgorithm(options as RateLimitOptions);
 
-    // Validate algorithm-specific parameters
-    if ('windowMs' in algo.config && Number(algo.config.windowMs) <= 0) {
+    // Validate algorithm-specific parameters. `!(x > 0)` also rejects NaN and missing
+    // values, which untyped (plain JS / JSON) configs can produce.
+    if ('windowMs' in algo.config && !(Number(algo.config.windowMs) > 0)) {
         throw new RangeError(`windowMs must be a positive number, got ${String(algo.config.windowMs)}`);
     }
-    if ('refillRate' in algo.config && Number(algo.config.refillRate) <= 0) {
+    if ('refillRate' in algo.config && !(Number(algo.config.refillRate) > 0)) {
         throw new RangeError(`refillRate must be a positive number, got ${String(algo.config.refillRate)}`);
     }
-    if ('refillMs' in algo.config && Number(algo.config.refillMs) <= 0) {
+    if ('refillMs' in algo.config && !(Number(algo.config.refillMs) > 0)) {
         throw new RangeError(`refillMs must be a positive number, got ${String(algo.config.refillMs)}`);
     }
 

@@ -9,7 +9,7 @@ import {
     extractClientIp,
     IP_HEADERS
 } from '../../src/index.js';
-import type { Store, RateLimitResult, Algorithm } from '../../src/index.js';
+import type { Store, RateLimitResult, Algorithm, AlgorithmConfig } from '../../src/index.js';
 
 function createRequest(ip = '1.2.3.4', path = '/'): Request {
     return new Request(`http://localhost${path}`, {
@@ -1785,6 +1785,33 @@ describe('hardened interfaces', () => {
         it('validation: refillMs negative throws RangeError (9.3a.9)', () => {
             expect(() => {
                 rateLimit({ limit: 10, algorithm: { type: 'token-bucket', refillRate: 10, refillMs: -1000 } });
+            }).toThrow(RangeError);
+        });
+
+        // Untyped (plain JS / JSON) configs can omit or garble numeric fields
+        it('validation: missing refillRate throws RangeError', () => {
+            const config: unknown = { type: 'token-bucket' };
+            expect(() => {
+                rateLimit({ limit: 10, algorithm: config as AlgorithmConfig });
+            }).toThrow(RangeError);
+        });
+
+        it('validation: NaN refillRate throws RangeError', () => {
+            expect(() => {
+                rateLimit({ limit: 10, algorithm: { type: 'token-bucket', refillRate: Number.NaN } });
+            }).toThrow(RangeError);
+        });
+
+        it('validation: missing windowMs throws RangeError', () => {
+            const config: unknown = { type: 'sliding-window' };
+            expect(() => {
+                rateLimit({ limit: 10, algorithm: config as AlgorithmConfig });
+            }).toThrow(RangeError);
+        });
+
+        it('validation: NaN windowMs throws RangeError', () => {
+            expect(() => {
+                rateLimit({ limit: 10, algorithm: { type: 'fixed-window', windowMs: Number.NaN } });
             }).toThrow(RangeError);
         });
 

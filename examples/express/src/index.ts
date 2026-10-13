@@ -3,6 +3,10 @@ import { expressRateLimit } from '@universal-rate-limit/express';
 
 const app = express();
 
+// Trust a reverse proxy on the same host, so req.ip (the default rate limit key)
+// is the client from X-Forwarded-For. Set this to match your real proxy setup.
+app.set('trust proxy', 'loopback');
+
 app.use(
     expressRateLimit({
         algorithm: { type: 'sliding-window', windowMs: 60_000 }, // 1 minute
